@@ -9,13 +9,15 @@ namespace pdf_fluent.ViewModels;
 
 public sealed partial class MainViewModel : ViewModelBase, IDisposable
 {
+    private const int MaxRecentDocuments = 12;
+
     private readonly PDFiumService _pdfService = new();
     private readonly RecentDocumentsService _recentService = new();
     private bool _disposed;
 
     public MainViewModel()
     {
-        foreach (var document in _recentService.Load().OrderByDescending(d => d.LastOpened).Take(12))
+        foreach (var document in _recentService.Load().OrderByDescending(d => d.LastOpened).Take(MaxRecentDocuments))
             RecentDocuments.Add(new RecentDocumentViewModel(document, RemoveRecentDocumentCommand));
     }
 
@@ -140,8 +142,8 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         WriteableBitmap? thumbnail = null;
         try
         {
-            var raw = await Task.Run(() => _pdfService.RenderPageToRawBuffer(document.FilePath, 0, 0.28f));
-            thumbnail = PDFiumService.CreateWriteableBitmapFromRawBuffer(raw.width, raw.height, raw.pixels);
+            thumbnail = await Task.Run(() =>
+                _pdfService.RenderPageToWriteableBitmap(document.FilePath, 0, 0.28f));
         }
         catch (Exception)
         {
@@ -165,7 +167,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             Thumbnail = thumbnail,
         });
 
-        while (RecentDocuments.Count > 12)
+        while (RecentDocuments.Count > MaxRecentDocuments)
         {
             var removed = RecentDocuments[^1];
             RecentDocuments.RemoveAt(RecentDocuments.Count - 1);

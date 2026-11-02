@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Rendering.Composition;
 using Avalonia.VisualTree;
 using pdf_fluent.Controls;
 using pdf_fluent.ViewModels;
@@ -12,6 +13,15 @@ namespace pdf_fluent.Tests;
 /// <summary>
 /// A document view hosted in a headless window, with helpers to locate page
 /// surfaces in viewport coordinates. Shared by the zoom and render tests.
+///
+/// <para>
+/// The zoom animation is applied by the compositor (<c>Scale</c> about
+/// <c>CenterPoint</c>), so layout coordinates alone only describe the
+/// committed state. <see cref="VisualPageRect"/> applies the same transform
+/// the render thread applies, using the controller's logical zoom clock and
+/// the composition origin; <see cref="PanelVisual"/> exposes the composition
+/// state that is actually handed to the render thread.
+/// </para>
 /// </summary>
 internal sealed class ZoomTestHarness : IDisposable
 {
@@ -38,6 +48,18 @@ internal sealed class ZoomTestHarness : IDisposable
 
     public ItemsControl Items =>
         Window.GetVisualDescendants().OfType<ItemsControl>().First();
+
+    public PdfVirtualizingPanel Panel =>
+        Window.GetVisualDescendants().OfType<PdfVirtualizingPanel>().First();
+
+    /// <summary>The composition visual the zoom scale animation runs on.</summary>
+    public CompositionVisual PanelVisual =>
+        ElementComposition.GetElementVisual(Panel)
+        ?? throw new InvalidOperationException("虚拟化面板没有组合视觉。");
+
+    /// <summary>Zoom of the visual state relative to the committed layout.</summary>
+    public double VisualScale =>
+        Document.Zoom > 0 ? Document.VisualZoom / Document.Zoom : 1;
 
     public PdfZoomController Zoom
     {
@@ -83,6 +105,28 @@ internal sealed class ZoomTestHarness : IDisposable
         ?? throw new InvalidOperationException("无法转换坐标。");
 
     public Rect PageRect(int pageIndex) => PageSurfaceRect(PageSurface(pageIndex));
+
+    /// <summary>
+    /// The page surface as the compositor currently shows it: the committed
+    /// layout rect scaled about the composition origin by
+    /// <see cref="VisualScale"/>, exactly like <c>CompositionVisual.Scale</c> and
+    /// <c>CompositionVisual.CenterPoint</c> are applied by the render thread.
+    /// </summary>
+    public Rect VisualPageRect(int pageIndex) =>
+        ScaleAbout(PageRect(pageIndex), VisualScale, Zoom.VisualOriginViewport);
+
+    /// <summary>The viewport position of a page fraction in the animated visual state.</summary>
+    public Point VisualPoint(int pageIndex, double fractionX, double fractionY)
+    {
+        Rect rect = VisualPageRect(pageIndex);
+        return new Point(rect.X + (fractionX * rect.Width), rect.Y + (fractionY * rect.Height));
+    }
+
+    public static Rect ScaleAbout(Rect rect, double scale, Point origin) => new(
+        origin.X + ((rect.X - origin.X) * scale),
+        origin.Y + ((rect.Y - origin.Y) * scale),
+        rect.Width * scale,
+        rect.Height * scale);
 
     /// <summary>The white page surface Border of a realized page container.</summary>
     public Border PageSurface(int pageIndex)

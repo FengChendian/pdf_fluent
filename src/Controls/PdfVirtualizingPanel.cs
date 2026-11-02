@@ -5,7 +5,6 @@ using Avalonia.Controls.Generators;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using pdf_fluent.ViewModels;
 
@@ -19,18 +18,24 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
             1.0,
             validate: value => value is >= 0 and <= 2);
 
-    public static readonly StyledProperty<int> LayoutVersionProperty =
-        AvaloniaProperty.Register<PdfVirtualizingPanel, int>(nameof(LayoutVersion));
+    public static readonly StyledProperty<double> ZoomProperty =
+        AvaloniaProperty.Register<PdfVirtualizingPanel, double>(nameof(Zoom), 1.0);
+
+    /// <summary>
+    /// Space around the whole page stack.  It lives on the panel (instead of a
+    /// Margin on the ItemsControl) so that the panel and the zoom controller
+    /// can share one unambiguous content geometry.
+    /// </summary>
+    public static readonly StyledProperty<Thickness> PaddingProperty =
+        AvaloniaProperty.Register<PdfVirtualizingPanel, Thickness>(nameof(Padding));
 
     private readonly Dictionary<int, Control> _realized = new();
     private readonly Stack<Control> _recyclePool = new();
-    private double[] _offsets = [];
-    private double _maxItemWidth;
-    private int _itemsCount;
-    private int _measuredLayoutVersion = -1;
+    private readonly HashSet<int> _retainedForZoom = new();
+    private double[] _basePageHeightOffsets = [];
+    private bool _zoomViewportFrozen;
+    private double _maxBaseItemWidth;
     private Rect _viewport;
-    private (int Index, double Ratio)? _pendingAnchor;
-    private int _scrollRestoreVersion;
 
     public PdfVirtualizingPanel()
     {
@@ -41,8 +46,10 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
     {
         BufferFactorProperty.Changed.AddClassHandler<PdfVirtualizingPanel>(
             (panel, _) => panel.InvalidateMeasure());
-        LayoutVersionProperty.Changed.AddClassHandler<PdfVirtualizingPanel>(
-            (panel, _) => panel.OnLayoutVersionChanged());
+        ZoomProperty.Changed.AddClassHandler<PdfVirtualizingPanel>(
+            (panel, _) => panel.InvalidateMeasure());
+        PaddingProperty.Changed.AddClassHandler<PdfVirtualizingPanel>(
+            (panel, _) => panel.InvalidateMeasure());
     }
 
     public double BufferFactor
@@ -51,30 +58,49 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         set => SetValue(BufferFactorProperty, value);
     }
 
-    public int LayoutVersion
+    public double Zoom
     {
-        get => GetValue(LayoutVersionProperty);
-        set => SetValue(LayoutVersionProperty, value);
+        get => GetValue(ZoomProperty);
+        set => SetValue(ZoomProperty, value);
     }
+
+    public Thickness Padding
+    {
+        get => GetValue(PaddingProperty);
+        set => SetValue(PaddingProperty, value);
+    }
+
+    internal int MeasurePassCount { get; private set; }
+    internal int ScrollDirection { get; private set; } = 1;
+
+    internal bool IsContainerVisible(Control container)
+    {
+        int index = IndexFromContainer(container);
+        if (index < 0 || _viewport.Height <= 0) return false;
+
+        double top = _viewport.Top - Padding.Top;
+        double bottom = top + _viewport.Height;
+        return ItemTopAt(index + 1, Zoom) > top && ItemTopAt(index, Zoom) < bottom;
+    }
+
+    /// <summary>
+    /// Horizontal offset of an item inside the panel's content area: pages are
+    /// centred while they fit and left-aligned once they overflow.
+    /// </summary>
+    internal static double HorizontalItemOffset(double contentAreaWidth, double itemWidth) =>
+        Math.Max(0, (contentAreaWidth - itemWidth) / 2);
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        MeasurePassCount++;
         if (Items.Count == 0)
         {
             RecycleAll();
-            _offsets = [];
-            _itemsCount = 0;
+            _basePageHeightOffsets = [];
             return default;
         }
 
-        bool layoutChanged = EnsureOffsets();
-        if (layoutChanged && _pendingAnchor is { } anchor)
-        {
-            double itemHeight = _offsets[anchor.Index + 1] - _offsets[anchor.Index];
-            double targetY = _offsets[anchor.Index] + itemHeight * anchor.Ratio;
-            _pendingAnchor = null;
-            RestoreScrollPosition(targetY);
-        }
+        EnsureBaseLayout();
 
         if (_viewport.Height <= 0 && double.IsFinite(availableSize.Height))
         {
@@ -82,7 +108,10 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         }
 
         GetRealizationRange(out int firstIndex, out int lastIndex);
-        foreach (int index in _realized.Keys.Where(index => index < firstIndex || index > lastIndex).ToArray())
+        foreach (int index in _realized.Keys
+                     .Where(index => (index < firstIndex || index > lastIndex) &&
+                                     !_retainedForZoom.Contains(index))
+                     .ToArray())
         {
             Recycle(index);
         }
@@ -91,19 +120,29 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         {
             Control container = GetOrCreate(index);
             var page = (PdfPageViewModel)Items[index]!;
-            container.Measure(new Size(page.ItemWidth, page.ItemHeight));
+            container.Measure(new Size(
+                PdfPageViewModel.PageWidthAt(page, Zoom),
+                PdfPageViewModel.ItemHeightAt(page, Zoom)));
         }
 
-        return new Size(_maxItemWidth, _offsets[^1]);
+        Thickness padding = Padding;
+        return new Size(
+            MaxItemWidthAt(Zoom) + padding.Left + padding.Right,
+            TotalItemHeightAt(Zoom) + padding.Top + padding.Bottom);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
+        Thickness padding = Padding;
+        double contentWidth = Math.Max(0, finalSize.Width - padding.Left - padding.Right);
+
         foreach (var (index, container) in _realized)
         {
             var page = (PdfPageViewModel)Items[index]!;
-            double x = Math.Max(0, (finalSize.Width - page.ItemWidth) / 2);
-            container.Arrange(new Rect(x, _offsets[index], page.ItemWidth, page.ItemHeight));
+            double width = PdfPageViewModel.PageWidthAt(page, Zoom);
+            double height = PdfPageViewModel.ItemHeightAt(page, Zoom);
+            double x = padding.Left + HorizontalItemOffset(contentWidth, width);
+            container.Arrange(new Rect(x, padding.Top + ItemTopAt(index, Zoom), width, height));
         }
 
         return finalSize;
@@ -114,10 +153,9 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         NotifyCollectionChangedEventArgs e)
     {
         RecycleAll();
-        _offsets = [];
-        _itemsCount = 0;
-        _pendingAnchor = null;
-        _scrollRestoreVersion++;
+        _retainedForZoom.Clear();
+        _zoomViewportFrozen = false;
+        _basePageHeightOffsets = [];
         InvalidateMeasure();
     }
 
@@ -146,11 +184,10 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
     protected override Control? ScrollIntoView(int index)
     {
         if (index < 0 || index >= Items.Count) return null;
-        EnsureOffsets();
 
         if (this.FindAncestorOfType<ScrollViewer>() is { } scrollViewer)
         {
-            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, _offsets[index]);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, Padding.Top + ItemTopAt(index, Zoom));
             InvalidateMeasure();
         }
 
@@ -175,7 +212,7 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
             _ => fromIndex,
         };
 
-        if (wrap && count > 0)
+        if (wrap)
         {
             if (toIndex < 0) toIndex = count - 1;
             else if (toIndex >= count) toIndex = 0;
@@ -184,27 +221,48 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         return toIndex >= 0 && toIndex < count ? ScrollIntoView(toIndex) : null;
     }
 
-    private bool EnsureOffsets()
+    internal void BeginZoomAnimation()
     {
-        if (_offsets.Length == Items.Count + 1 &&
-            _itemsCount == Items.Count &&
-            _measuredLayoutVersion == LayoutVersion)
-        {
-            return false;
-        }
+        _zoomViewportFrozen = false;
+        _retainedForZoom.Clear();
+        foreach (int index in _realized.Keys) _retainedForZoom.Add(index);
+    }
 
-        _offsets = new double[Items.Count + 1];
-        _maxItemWidth = 0;
+    internal void FreezeZoomViewport() => _zoomViewportFrozen = true;
+
+    internal void EndZoomAnimation()
+    {
+        _zoomViewportFrozen = false;
+        _retainedForZoom.Clear();
+        InvalidateMeasure();
+    }
+
+    private void EnsureBaseLayout()
+    {
+        if (_basePageHeightOffsets.Length == Items.Count + 1) return;
+
+        _basePageHeightOffsets = new double[Items.Count + 1];
+        _maxBaseItemWidth = 0;
         for (int i = 0; i < Items.Count; i++)
         {
             var page = (PdfPageViewModel)Items[i]!;
-            _maxItemWidth = Math.Max(_maxItemWidth, page.ItemWidth);
-            _offsets[i + 1] = _offsets[i] + page.ItemHeight;
+            _maxBaseItemWidth = Math.Max(_maxBaseItemWidth, page.BaseWidth);
+            _basePageHeightOffsets[i + 1] = _basePageHeightOffsets[i] + page.BaseHeight;
         }
+    }
 
-        _itemsCount = Items.Count;
-        _measuredLayoutVersion = LayoutVersion;
-        return true;
+    internal double MaxItemWidthAt(double zoom)
+    {
+        EnsureBaseLayout();
+        return Math.Max(1, _maxBaseItemWidth * zoom);
+    }
+
+    internal double TotalItemHeightAt(double zoom) => ItemTopAt(Items.Count, zoom);
+
+    internal double ItemTopAt(int index, double zoom)
+    {
+        EnsureBaseLayout();
+        return _basePageHeightOffsets[index] * zoom + PdfPageViewModel.FooterHeight * index;
     }
 
     private void GetRealizationRange(out int firstIndex, out int lastIndex)
@@ -217,24 +275,25 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
         }
 
         double buffer = _viewport.Height * BufferFactor;
-        double start = Math.Max(0, _viewport.Top - buffer);
-        double end = Math.Min(_offsets[^1], _viewport.Bottom + buffer);
-        firstIndex = FindPageIndex(start);
+        double top = _viewport.Top - Padding.Top;
+        double start = Math.Max(0, top - buffer);
+        double end = Math.Min(TotalItemHeightAt(Zoom), top + _viewport.Height + buffer);
+        firstIndex = FindPageIndexAt(start, Zoom);
         lastIndex = firstIndex;
-        while (lastIndex + 1 < Items.Count && _offsets[lastIndex + 1] < end)
+        while (lastIndex + 1 < Items.Count && ItemTopAt(lastIndex + 1, Zoom) < end)
         {
             lastIndex++;
         }
     }
 
-    private int FindPageIndex(double y)
+    internal int FindPageIndexAt(double y, double zoom)
     {
         int low = 0;
         int high = Items.Count - 1;
         while (low <= high)
         {
             int middle = low + (high - low) / 2;
-            if (_offsets[middle + 1] <= y) low = middle + 1;
+            if (ItemTopAt(middle + 1, zoom) <= y) low = middle + 1;
             else high = middle - 1;
         }
 
@@ -274,9 +333,14 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
 
     private void OnEffectiveViewportChanged(object? sender, EffectiveViewportChangedEventArgs e)
     {
+        if (_zoomViewportFrozen) return;
+
         Rect previous = _viewport;
-        _viewport = e.EffectiveViewport.Intersect(new Rect(Bounds.Size));
-        if (Items.Count == 0 || _offsets.Length != Items.Count + 1)
+        Rect viewport = e.EffectiveViewport.Intersect(new Rect(Bounds.Size));
+        if (Math.Abs(viewport.Top - previous.Top) > 0.5)
+            ScrollDirection = Math.Sign(viewport.Top - previous.Top);
+        _viewport = viewport;
+        if (Items.Count == 0 || _basePageHeightOffsets.Length != Items.Count + 1)
         {
             InvalidateMeasure();
             return;
@@ -292,41 +356,11 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
     {
         if (_realized.Count == 0 || _viewport.Height <= 0) return false;
         double buffer = _viewport.Height * BufferFactor;
-        double start = Math.Max(0, _viewport.Top - buffer);
-        double end = Math.Min(_offsets[^1], _viewport.Bottom + buffer);
+        double top = _viewport.Top - Padding.Top;
+        double start = Math.Max(0, top - buffer);
+        double end = Math.Min(TotalItemHeightAt(Zoom), top + _viewport.Height + buffer);
         int first = _realized.Keys.Min();
         int last = _realized.Keys.Max();
-        return _offsets[first] <= start && _offsets[last + 1] >= end;
-    }
-
-    private void OnLayoutVersionChanged()
-    {
-        if (_offsets.Length == Items.Count + 1 && Items.Count > 0 && _viewport.Height > 0)
-        {
-            int index = FindPageIndex(_viewport.Top);
-            double itemHeight = _offsets[index + 1] - _offsets[index];
-            double ratio = itemHeight > 0
-                ? Math.Clamp((_viewport.Top - _offsets[index]) / itemHeight, 0, 1)
-                : 0;
-            _pendingAnchor = (index, ratio);
-        }
-
-        InvalidateMeasure();
-    }
-
-    private void RestoreScrollPosition(double targetY)
-    {
-        int restoreVersion = ++_scrollRestoreVersion;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (restoreVersion != _scrollRestoreVersion) return;
-            if (this.FindAncestorOfType<ScrollViewer>() is { } scrollViewer)
-            {
-                double maxY = Math.Max(0, _offsets[^1] - _viewport.Height);
-                scrollViewer.Offset = new Vector(
-                    scrollViewer.Offset.X,
-                    Math.Clamp(targetY, 0, maxY));
-            }
-        }, DispatcherPriority.Loaded);
+        return ItemTopAt(first, Zoom) <= start && ItemTopAt(last + 1, Zoom) >= end;
     }
 }

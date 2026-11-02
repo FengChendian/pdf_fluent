@@ -2,3 +2,17 @@
 
 - Python 脚本统一通过 `uv run python <script.py>` 启动，不要直接调用 `python` 或 `python3`。
 - Avalonia 功能验证优先使用 Avalonia Headless 自动化测试，不要依赖桌面截图判断布局、滚动或虚拟化行为；截图仅用于人工视觉检查。
+
+# PDF 位图缓存约定（务必保持）
+
+- 缓存预算 `DocumentTabViewModel.MaxBitmapCacheBytes`（256 MiB）按**真实位图像素字节**（`PixelSize.Width * PixelSize.Height * 4`）记账，不按渲染倍率、页数或估算值。
+- 页面重渲染会替换位图，此时扣减缓存必须使用该条目**入缓存时记录的字节数**（`_cacheEntryBytes`），**禁止**读取 `page.Image` 的“当前尺寸”来扣减。原因：`TouchCache` 里 `page.SetImage(...)` 已把 `page.Image` 换成新位图，若 `RemoveCacheEntry` 此时用 `GetImageBytes(page)`，就会“减去新尺寸、再加回新尺寸”，条目永远停留在首次渲染的尺寸；缩放或切到 HiDPI 后新位图可达旧位图的 16 倍（1.25 → 5.0 px/pt），预算上限将永远触发不了淘汰，实际内存可达账面的 2 倍以上（曾在 128 MiB 预算下实测 243.7 MiB / 账面 127.7 MiB）。
+- 正确实现见 `src/ViewModels/DocumentTabViewModel.cs` 的 `_cacheEntryBytes`、`TouchCache`、`RemoveCacheEntry`。修改缩放、DPI、重渲染相关代码后必须保持该记账方式。
+- 维护不变量：淘汰后 `CachedBitmapBytes` 应等于所有活页面的位图字节之和；`TrimCache` 只淘汰不在 `_realizedPages` 中的页（可见页 + 预取缓冲页固定不淘汰）。
+- 缓存回收是事件驱动的，不是定时器：只在渲染完成（`TouchCache`）、页面离开实现集合（`ReleasePage`）、布局同步（`SyncRealizedPages`）时执行 `TrimCache`。因此可见页/缓冲页较多时，位图总量允许短时高于预算；不要据此添加定时 `GC.Collect` 之类的“回收”。
+- 排查内存问题时必须区分三类数据：LRU 位图缓存、单次渲染的瞬时缓冲、以及 .NET/Windows 尚未归还的进程工作集；只有第一类受 256 MiB 预算约束。当前单页渲染让 PDFium 直接写入未发布的 `WriteableBitmap`，不再分配原始像素数组；只有兼容的原始缓冲区/批量 API 才会额外持有原始像素数组。
+- 回归测试：`DocumentTabViewModelTests.CacheBudgetUsesActualBitmapSizeAfterReRenderingAtHigherScale`、`DocumentTabViewModelTests.SwitchingAwayReleasesAllCachedBitmaps`、`PdfVirtualizationMemoryTests.ZoomingInAfterScrollingKeepsTheBitmapCacheWithinBudget`。改动缓存淘汰逻辑后必须全部通过。
+
+# 测试资源备注
+
+- `tests/pdf_fluent.Tests/assets/CUDA_by_Example.pdf`：PDF 功能测试样本。

@@ -5,27 +5,79 @@ namespace pdf_fluent.ViewModels;
 
 public sealed partial class PdfPageViewModel : ViewModelBase
 {
-    private const double PageFooterHeight = 33;
-    private readonly double _width;
-    private readonly double _height;
+    /// <summary>Vertical space reserved below a page for its page number.</summary>
+    public const double FooterHeight = 33;
 
-    public PdfPageViewModel(int pageIndex, double width, double height, double renderScale)
+    private readonly double _baseWidth;
+    private readonly double _baseHeight;
+    private double _zoom;
+    private WriteableBitmap? _image;
+
+    public PdfPageViewModel(int pageIndex, double widthInPoints, double heightInPoints, double zoom)
     {
         PageIndex = pageIndex;
-        _width = width;
-        _height = height;
-        SetLayout(width, height, renderScale);
+        PointWidth = Math.Max(1, widthInPoints);
+        PointHeight = Math.Max(1, heightInPoints);
+        _baseWidth = PointWidth * DocumentTabViewModel.LayoutScale;
+        _baseHeight = PointHeight * DocumentTabViewModel.LayoutScale;
+        _zoom = Math.Max(0.01, zoom);
     }
 
     public int PageIndex { get; }
-    public int PageNumber => PageIndex + 1;
-    public double PageWidth { get; private set; }
-    public double PageHeight { get; private set; }
-    public double ItemWidth => PageWidth;
-    public double ItemHeight => PageHeight + PageFooterHeight;
 
-    [ObservableProperty]
-    private WriteableBitmap? _image;
+    public int PageNumber => PageIndex + 1;
+
+    /// <summary>Page width in PDF points (1/72 inch).</summary>
+    public double PointWidth { get; }
+
+    /// <summary>Page height in PDF points (1/72 inch).</summary>
+    public double PointHeight { get; }
+
+    /// <summary>Page width in layout units at 100% zoom.</summary>
+    public double BaseWidth => _baseWidth;
+
+    /// <summary>Page height in layout units at 100% zoom.</summary>
+    public double BaseHeight => _baseHeight;
+
+    /// <summary>Zoom factor the page is currently laid out with.</summary>
+    public double Zoom => _zoom;
+
+    public double PageWidth => PageWidthAt(this, _zoom);
+
+    public double PageHeight => PageHeightAt(this, _zoom);
+
+    public double ItemWidth => PageWidth;
+
+    public double ItemHeight => ItemHeightAt(this, _zoom);
+
+    /// <summary>
+    /// Render scale (device pixels per PDF point) the bitmap currently in
+    /// <see cref="Image"/> was produced with. <see cref="double.NaN"/> when
+    /// there is no bitmap.
+    /// </summary>
+    public double RenderedScale { get; private set; } = double.NaN;
+
+    /// <summary>
+    /// Current bitmap. It stays in place while the page is re-rendered for a
+    /// new zoom factor, so zooming never blanks the page.
+    /// </summary>
+    public WriteableBitmap? Image
+    {
+        get => _image;
+        private set
+        {
+            WriteableBitmap? previous = _image;
+            if (ReferenceEquals(previous, value)) return;
+
+            // Publish the new bitmap before releasing the old one: the
+            // Image control drops its reference to the previous bitmap as
+            // part of the property-change notification.
+            _image = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsPlaceholderVisible));
+            previous?.Dispose();
+        }
+    }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -35,23 +87,55 @@ public sealed partial class PdfPageViewModel : ViewModelBase
 
     public bool HasError => ErrorMessage is not null;
 
+    /// <summary>
+    /// The loading placeholder is only shown for pages that have nothing to
+    /// display yet; re-rendering an already visible page keeps the previous
+    /// bitmap on screen instead of flashing a spinner.
+    /// </summary>
+    public bool IsPlaceholderVisible => IsLoading && _image is null;
+
     partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
 
-    public void SetRenderScale(double renderScale) => SetLayout(_width, _height, renderScale);
+    partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(IsPlaceholderVisible));
 
-    private void SetLayout(double width, double height, double renderScale)
+    /// <summary>Updates the layout zoom. Notifications are optional because a
+    /// zoom animation only needs to notify the pages that are on screen.</summary>
+    public void SetZoom(double zoom, bool notify)
     {
-        PageWidth = Math.Max(1, width * renderScale);
-        PageHeight = Math.Max(1, height * renderScale);
+        if (_zoom.Equals(zoom)) return;
+        _zoom = zoom;
+        if (notify) NotifyLayoutChanged();
+    }
+
+    public void NotifyLayoutChanged()
+    {
+        OnPropertyChanged(nameof(Zoom));
         OnPropertyChanged(nameof(PageWidth));
         OnPropertyChanged(nameof(PageHeight));
         OnPropertyChanged(nameof(ItemWidth));
         OnPropertyChanged(nameof(ItemHeight));
     }
 
+    public void SetImage(WriteableBitmap bitmap, double renderedScale)
+    {
+        RenderedScale = renderedScale;
+        Image = bitmap;
+    }
+
     public void ClearImage()
     {
-        Image?.Dispose();
+        RenderedScale = double.NaN;
         Image = null;
     }
+
+    // ── Geometry helpers shared by the panel and the zoom controller ──
+
+    public static double PageWidthAt(PdfPageViewModel page, double zoom) =>
+        Math.Max(1, page._baseWidth * zoom);
+
+    public static double PageHeightAt(PdfPageViewModel page, double zoom) =>
+        Math.Max(1, page._baseHeight * zoom);
+
+    public static double ItemHeightAt(PdfPageViewModel page, double zoom) =>
+        PageHeightAt(page, zoom) + FooterHeight;
 }

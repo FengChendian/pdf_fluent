@@ -7,6 +7,7 @@ using pdf_fluent.Services;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
+using static pdf_fluent.Tests.PdfTestHelpers;
 
 namespace pdf_fluent.Tests;
 
@@ -202,14 +203,6 @@ public sealed class PdfDpiTests
         }
     }
 
-    private static string SamplePdfPath()
-    {
-        string path = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "assets", "CUDA_by_Example.pdf");
-        Assert.True(File.Exists(path), $"缺少测试样本：{Path.GetFullPath(path)}");
-        return path;
-    }
-
     /// <summary>
     /// Mimics the platform notifying the window that it moved to a monitor with
     /// a different DPI.  The headless window implementation is internal to
@@ -227,13 +220,4 @@ public sealed class PdfDpiTests
         changed?.Invoke(scaling);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
-    {
-        DateTime deadline = DateTime.UtcNow + timeout;
-        while (!condition())
-        {
-            if (DateTime.UtcNow >= deadline) throw new TimeoutException("等待页面渲染超时。");
-            await Task.Delay(10);
-        }
-    }
 }

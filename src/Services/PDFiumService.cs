@@ -37,7 +37,10 @@ namespace pdf_fluent.Services
             }
         }
 
-        private static FpdfDocumentT LoadDocument(string filePath)
+        private int _documentOpenCount;
+        internal int DocumentOpenCount => _documentOpenCount;
+
+        private static FpdfDocumentT LoadDocumentCore(string filePath)
         {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException("PDF 文件不存在。", filePath);
@@ -51,85 +54,72 @@ namespace pdf_fluent.Services
             }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  Document metadata (lightweight — opens/closes a temp document)
-        // ════════════════════════════════════════════════════════════════
+        private FpdfDocumentT GetOrLoadDocument(string filePath)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_pdfDocumentCache.TryGetValue(filePath, out var cached)) return cached;
+
+            lock (_pageLock)
+            {
+                if (_pdfDocumentCache.TryGetValue(filePath, out cached)) return cached;
+                var document = LoadDocumentCore(filePath);
+                _pdfDocumentCache[filePath] = document;
+                _documentOpenCount++;
+                return document;
+            }
+        }
+
+        private FpdfDocumentT LoadDocument(string filePath)
+        {
+            var document = LoadDocumentCore(filePath);
+            _documentOpenCount++;
+            return document;
+        }
 
         public int GetPageCount(string filePath)
         {
-            var document = LoadDocument(filePath);
-            try
-            {
-                return fpdfview.FPDF_GetPageCount(document);
-            }
-            finally
-            {
-                fpdfview.FPDF_CloseDocument(document);
-            }
+            lock (_pageLock)
+                return fpdfview.FPDF_GetPageCount(GetOrLoadDocument(filePath));
         }
 
         public (double Width, double Height) GetPageSize(string filePath, int pageNumber)
         {
             double width = 0, height = 0;
-            var document = LoadDocument(filePath);
-            try
+            lock (_pageLock)
             {
+                var document = GetOrLoadDocument(filePath);
                 fpdfview.FPDF_GetPageSizeByIndex(document, pageNumber, ref width, ref height);
-                return (width, height);
             }
-            finally
-            {
-                fpdfview.FPDF_CloseDocument(document);
-            }
+
+            return (width, height);
         }
 
         public (double Width, double Height)[] GetPageSizes(string filePath)
         {
-            var document = LoadDocument(filePath);
-            try
+            lock (_pageLock)
             {
+                var document = GetOrLoadDocument(filePath);
                 int pageCount = fpdfview.FPDF_GetPageCount(document);
                 var sizes = new (double Width, double Height)[pageCount];
-                lock (_pageLock)
+                for (int i = 0; i < pageCount; i++)
                 {
-                    for (int i = 0; i < pageCount; i++)
-                    {
-                        double width = 0, height = 0;
-                        fpdfview.FPDF_GetPageSizeByIndex(document, i, ref width, ref height);
-                        sizes[i] = (width, height);
-                    }
+                    double width = 0;
+                    double height = 0;
+                    fpdfview.FPDF_GetPageSizeByIndex(document, i, ref width, ref height);
+                    sizes[i] = (width, height);
                 }
 
                 return sizes;
             }
-            finally
-            {
-                fpdfview.FPDF_CloseDocument(document);
-            }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  Thread-safe raw rendering (NO UI dependency — safe on any thread)
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Renders a single page into a raw byte buffer.
-        /// Thread-safe — may be called from any thread.
-        /// </summary>
         public (int width, int height, byte[] pixels) RenderPageToRawBuffer(
             string filePath,
             int pageNumber = 0,
             float scale = 1f)
         {
-            var document = LoadDocument(filePath);
-            try
-            {
-                return RenderSinglePageToBuffer(document, pageNumber, scale);
-            }
-            finally
-            {
-                fpdfview.FPDF_CloseDocument(document);
-            }
+            lock (_pageLock)
+                return RenderSinglePageToBuffer(GetOrLoadDocument(filePath), pageNumber, scale);
         }
 
         /// <summary>
@@ -145,25 +135,49 @@ namespace pdf_fluent.Services
             return rawBuffers;
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  Single-page convenience (UI-thread only — creates WriteableBitmap)
-        // ════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Renders a single page directly into a <see cref="WriteableBitmap"/>.
-        /// Must be called from the UI Thread.
+        /// Renders directly into a bitmap that is not yet attached to the visual tree.
+        /// The completed bitmap can be published on the UI thread without a pixel copy.
         /// </summary>
         public WriteableBitmap RenderPageToWriteableBitmap(
             string filePath,
             int pageNumber = 0,
-            float scale = 1f)
+            float scale = 1f,
+            CancellationToken cancellationToken = default)
         {
-            var (width, height, pixels) = RenderPageToRawBuffer(filePath, pageNumber, scale);
-            return CreateWriteableBitmapFromRawBuffer(width, height, pixels);
+            lock (_pageLock)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var document = GetOrLoadDocument(filePath);
+                return RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var bitmap = new WriteableBitmap(
+                        new PixelSize(width, height),
+                        new Vector(96, 96),
+                        PixelFormat.Bgra8888,
+                        AlphaFormat.Premul);
+                    try
+                    {
+                        using (var target = bitmap.Lock())
+                        {
+                            RenderPageIntoBuffer(
+                                page, width, height, target.Address, target.RowBytes, cancellationToken);
+                        }
+
+                        return bitmap;
+                    }
+                    catch
+                    {
+                        bitmap.Dispose();
+                        throw;
+                    }
+                });
+            }
         }
 
         // ════════════════════════════════════════════════════════════════
-        //  Batch convenience (UI-thread only — creates WriteableBitmaps)
+        //  Batch bitmap convenience
         // ════════════════════════════════════════════════════════════════
 
         public Dictionary<int, WriteableBitmap> RenderPagesToWriteableBitmaps(
@@ -212,31 +226,17 @@ namespace pdf_fluent.Services
         {
             if (pageNumbers.Length == 0) return;
 
-            var document = LoadDocument(filePath);
-            try
+            lock (_pageLock)
             {
+                var document = GetOrLoadDocument(filePath);
                 for (int i = 0; i < pageNumbers.Length; i++)
-                {
                     output[i] = RenderSinglePageToBuffer(document, pageNumbers[i], scale);
-                }
-            }
-            finally
-            {
-                fpdfview.FPDF_CloseDocument(document);
             }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  Per-page raw rendering (Thread-agnostic)
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Renders a single page into a raw byte array instead of a UI element.
-        /// This is safe to run on background ThreadPool threads.
-        /// </summary>
         /// <remarks>
-        /// PDFium is not internally thread-safe — even on different document handles,
-        /// concurrent calls to FPDF_LoadPage/FPDF_ClosePage can race on global state.
+        /// PDFium is not internally thread-safe. The same lock also keeps a cached
+        /// document alive until the current native operation has finished.
         /// </remarks>
         private static readonly object _pageLock = new();
 
@@ -245,114 +245,110 @@ namespace pdf_fluent.Services
             int pageNumber,
             float scale)
         {
-            double pageWidth = 0;
-            double pageHeight = 0;
+            return RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
+            {
+                byte[] pixels = new byte[checked(width * height * 4)];
+                unsafe
+                {
+                    fixed (byte* buffer = pixels)
+                    {
+                        RenderPageIntoBuffer(
+                            page, width, height, (IntPtr)buffer, width * 4, CancellationToken.None);
+                    }
+                }
 
+                return (width, height, pixels);
+            });
+        }
+
+        private static T RenderSinglePage<T>(
+            FpdfDocumentT document,
+            int pageNumber,
+            float scale,
+            Func<FpdfPageT, int, int, T> render)
+        {
             FpdfPageT page;
+            int width;
+            int height;
             lock (_pageLock)
             {
-                page = fpdfview.FPDF_LoadPage(document, pageNumber);
-                // Hide highlight annotations so they never bake into the
-                // rendered bitmap — the viewer draws them itself on an
-                // overlay (single source of truth, no double-draw).
+                double pageWidth = 0;
+                double pageHeight = 0;
+                page = fpdfview.FPDF_LoadPage(document, pageNumber)
+                       ?? throw new InvalidOperationException($"无法加载 PDF 第 {pageNumber + 1} 页。");
                 HideHighlightAnnotations(page);
+                fpdfview.FPDF_GetPageSizeByIndex(document, pageNumber, ref pageWidth, ref pageHeight);
+                width = Math.Max(1, (int)(pageWidth * scale));
+                height = Math.Max(1, (int)(pageHeight * scale));
             }
+
             try
             {
-                lock (_pageLock)
-                {
-                    fpdfview.FPDF_GetPageSizeByIndex(document, pageNumber, ref pageWidth, ref pageHeight);
-                }
-
-                int width = (int)(pageWidth * scale);
-                int height = (int)(pageHeight * scale);
-
-                var bitmap = fpdfview.FPDFBitmapCreateEx(
-                    width, height,
-                    (int)FPDFBitmapFormat.BGRA,
-                    IntPtr.Zero, 0);
-
-                if (bitmap == null)
-                    throw new Exception("Failed to create a PDFium bitmap object.");
-
-                try
-                {
-                    // White background.
-                    uint color = uint.MaxValue;
-                    fpdfview.FPDFBitmapFillRect(bitmap, 0, 0, width, height, color);
-
-                    using var matrix = new FS_MATRIX_();
-                    using var clip = new FS_RECTF_();
-                    matrix.A = scale;
-                    matrix.B = 0;
-                    matrix.C = 0;
-                    matrix.D = scale;
-                    matrix.E = 0;
-                    matrix.F = 0;
-
-                    clip.Left = 0;
-                    clip.Top = 0;
-                    clip.Right = width;
-                    clip.Bottom = height;
-
-                    lock (_pageLock)
-                    {
-                        fpdfview.FPDF_RenderPageBitmapWithMatrix(
-                            bitmap, page, matrix, clip,
-                            (int)RenderFlags.RenderAnnotations);
-                    }
-
-                    var scan0 = fpdfview.FPDFBitmapGetBuffer(bitmap);
-                    var stride = fpdfview.FPDFBitmapGetStride(bitmap);
-                    int rowBytes = width * 4; // BGRA = 4 bytes per pixel
-
-                    // Extract memory locally inside the thread
-                    byte[] pixelData = new byte[height * rowBytes];
-
-                    unsafe
-                    {
-                        byte* src = (byte*)scan0;
-
-                        if (stride == rowBytes)
-                        {
-                            // Rows are tightly packed — copy everything in one pass.
-                            new ReadOnlySpan<byte>(src, height * rowBytes).CopyTo(pixelData);
-                        }
-                        else
-                        {
-                            // Stride includes padding — copy row by row.
-                            for (int y = 0; y < height; y++)
-                            {
-                                new ReadOnlySpan<byte>(src + y * stride, rowBytes)
-                                    .CopyTo(new Span<byte>(pixelData, y * rowBytes, rowBytes));
-                            }
-                        }
-                    }
-
-                    return (width, height, pixelData);
-                }
-                finally
-                {
-                    fpdfview.FPDFBitmapDestroy(bitmap);
-                }
+                return render(page, width, height);
             }
             finally
             {
-                lock (_pageLock)
+                lock (_pageLock) fpdfview.FPDF_ClosePage(page);
+            }
+        }
+
+        private static void RenderPageIntoBuffer(
+            FpdfPageT page,
+            int width,
+            int height,
+            IntPtr buffer,
+            int stride,
+            CancellationToken cancellationToken)
+        {
+            const int renderToBeContinued = 1;
+            const int renderDone = 2;
+
+            lock (_pageLock)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var bitmap = fpdfview.FPDFBitmapCreateEx(
+                    width, height, (int)FPDFBitmapFormat.BGRA, buffer, stride);
+                if (bitmap == null)
+                    throw new InvalidOperationException("无法创建 PDFium 位图。");
+
+                using var pause = new IFSDK_PAUSE { Version = 1 };
+                pause.NeedToPauseNow = _ => cancellationToken.IsCancellationRequested ? 1 : 0;
+                try
                 {
-                    fpdfview.FPDF_ClosePage(page);
+                    fpdfview.FPDFBitmapFillRect(bitmap, 0, 0, width, height, uint.MaxValue);
+                    int status = fpdf_progressive.FPDF_RenderPageBitmapStart(
+                        bitmap, page, 0, 0, width, height, 0,
+                        (int)RenderFlags.RenderAnnotations, pause);
+                    while (status == renderToBeContinued && !cancellationToken.IsCancellationRequested)
+                        status = fpdf_progressive.FPDF_RenderPageContinue(page, pause);
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (status != renderDone)
+                        throw new InvalidOperationException($"PDFium 渲染失败，状态码：{status}。");
+                }
+                finally
+                {
+                    fpdf_progressive.FPDF_RenderPageClose(page);
+                    fpdfview.FPDFBitmapDestroy(bitmap);
                 }
             }
         }
 
         // ════════════════════════════════════════════════════════════════
-        //  UI Helper (must be called on the UI thread)
+        //  Bitmap helpers
         // ════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Creates a <see cref="WriteableBitmap"/> from raw BGRA pixel data.
-        /// Must be called from the UI thread.
-        /// </summary>
+        public void ReleaseDocument(string filePath)
+        {
+            lock (_pageLock)
+            {
+                ReleaseTextPagesForFile(filePath);
+                if (_pdfDocumentCache.TryRemove(filePath, out var document))
+                    fpdfview.FPDF_CloseDocument(document);
+            }
+        }
+
+        /// <summary>Creates a <see cref="WriteableBitmap"/> from raw BGRA pixel data.</summary>
         public static WriteableBitmap CreateWriteableBitmapFromRawBuffer(int width, int height, byte[] pixelData)
         {
             var expectedLength = checked(width * height * 4);
@@ -368,13 +364,24 @@ namespace pdf_fluent.Services
             using (var target = bitmap.Lock())
             {
                 int rowBytes = width * 4;
-                for (int y = 0; y < height; y++)
+
+                if (target.RowBytes == rowBytes)
                 {
-                    Marshal.Copy(
-                        pixelData,
-                        y * rowBytes,
-                        target.Address + y * target.RowBytes,
-                        rowBytes);
+                    // Tightly packed: a single interop copy is several times
+                    // faster than one Marshal.Copy per row, which matters a lot
+                    // on HiDPI screens where every page is tens of megabytes.
+                    Marshal.Copy(pixelData, 0, target.Address, pixelData.Length);
+                }
+                else
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        Marshal.Copy(
+                            pixelData,
+                            y * rowBytes,
+                            target.Address + y * target.RowBytes,
+                            rowBytes);
+                    }
                 }
             }
 
@@ -392,23 +399,15 @@ namespace pdf_fluent.Services
         /// </summary>
         public FpdfTextpageT LoadTextPage(string filePath, int pageIndex)
         {
-            string docKey = filePath;
             string pageKey = $"{filePath}|{pageIndex}";
 
             if (_textPageCache.TryGetValue(pageKey, out var cached))
                 return cached;
 
-            if (!_pdfDocumentCache.TryGetValue(docKey, out var document))
-            {
-                document = LoadDocument(filePath);
-                if (document == null)
-                    throw new Exception($"Failed to open PDF for text: {filePath}");
-                _pdfDocumentCache[docKey] = document;
-            }
-
             FpdfTextpageT textPage;
             lock (_pageLock)
             {
+                var document = GetOrLoadDocument(filePath);
                 var page = fpdfview.FPDF_LoadPage(document, pageIndex);
                 try
                 {
@@ -442,17 +441,16 @@ namespace pdf_fluent.Services
         /// </summary>
         public void ReleaseAllTextPages()
         {
-            foreach (var kv in _textPageCache)
+            lock (_pageLock)
             {
-                fpdf_text.FPDFTextClosePage(kv.Value);
-            }
-            _textPageCache.Clear();
+                foreach (var kv in _textPageCache)
+                    fpdf_text.FPDFTextClosePage(kv.Value);
+                _textPageCache.Clear();
 
-            foreach (var kv in _pdfDocumentCache)
-            {
-                fpdfview.FPDF_CloseDocument(kv.Value);
+                foreach (var kv in _pdfDocumentCache)
+                    fpdfview.FPDF_CloseDocument(kv.Value);
+                _pdfDocumentCache.Clear();
             }
-            _pdfDocumentCache.Clear();
         }
 
         /// <summary>
@@ -589,9 +587,9 @@ namespace pdf_fluent.Services
 
         /// <summary>
         /// Sets the HIDDEN flag on all highlight annotations of a page so
-        /// PDFium does not render them into the bitmap.  Only affects the
-        /// transient document used for this render call — the file and any
-        /// other document instance are untouched.  Caller must hold
+        /// PDFium does not render them into the bitmap. Only affects the cached
+        /// rendering document; the file and transient editing instances are
+        /// untouched. Caller must hold
         /// <see cref="_pageLock"/>.
         /// </summary>
         private static void HideHighlightAnnotations(FpdfPageT page)
@@ -614,7 +612,6 @@ namespace pdf_fluent.Services
         {
             var result = new List<TocItem>();
             var document = LoadDocument(filePath);
-            if (document == null) return result;
             try
             {
                 lock (_pageLock)
@@ -688,7 +685,6 @@ namespace pdf_fluent.Services
         {
             var result = new List<PdfHighlight>();
             var document = LoadDocument(filePath);
-            if (document == null) return result;
             try
             {
                 int pageCount = fpdfview.FPDF_GetPageCount(document);
@@ -787,8 +783,6 @@ namespace pdf_fluent.Services
             string filePath, IReadOnlyList<PdfHighlight> highlights, string tempPath)
         {
             var document = LoadDocument(filePath);
-            if (document == null)
-                throw new InvalidOperationException($"无法打开 PDF 文档: {filePath}");
             try
             {
                 var byPage = highlights
