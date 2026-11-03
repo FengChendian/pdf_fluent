@@ -11,5 +11,14 @@
 
     <Application.Styles>
         <FluentTheme />
+        <Style Selector="Button:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+        <Style Selector="MenuItem:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
     </Application.Styles>
 </Application>

@@ -114,6 +114,15 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
+    private void CloseAllDocuments()
+    {
+        DocumentTabViewModel[] documents = OpenDocuments.ToArray();
+        SelectedDocument = null;
+        OpenDocuments.Clear();
+        foreach (DocumentTabViewModel document in documents) document.Dispose();
+    }
+
+    [RelayCommand]
     private void RemoveRecentDocument(RecentDocumentViewModel? document)
     {
         if (document is null || !RecentDocuments.Remove(document)) return;

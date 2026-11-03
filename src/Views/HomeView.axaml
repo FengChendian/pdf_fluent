@@ -4,6 +4,12 @@
              x:Class="pdf_fluent.Views.HomeView"
              x:DataType="vm:MainViewModel">
     <UserControl.Styles>
+        <Style Selector="Button.plain-button">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.plain-button:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
         <Style Selector="Button.quick-card">
             <Setter Property="Width" Value="280" />
             <Setter Property="Background" Value="Transparent" />
@@ -158,8 +164,8 @@
                     </StackPanel>
                     <TextBlock Grid.Column="1" Text="网格模式" FontSize="12" Foreground="#9A9EAE"
                                VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <Button Grid.Column="2" Command="{Binding ClearRecentDocumentsCommand}"
-                            Background="Transparent" BorderThickness="0" Padding="8,5" Cursor="Hand">
+                    <Button Grid.Column="2" Classes="plain-button" Command="{Binding ClearRecentDocumentsCommand}"
+                            BorderThickness="0" Padding="8,5" Cursor="Hand">
                         <TextBlock Text="清除所有记录" FontSize="12" Foreground="#81869A" />
                     </Button>
                 </Grid>

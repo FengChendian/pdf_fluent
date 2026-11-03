@@ -329,7 +329,7 @@ public sealed class PdfZoomTests
 
         Button zoomIn = ZoomTestHarness.Window.GetVisualDescendants()
             .OfType<Button>()
-            .First(button => button.Content is "+");
+            .First(button => button.Name == "ZoomInButton");
         Point buttonCenter = zoomIn.TranslatePoint(
             new Point(zoomIn.Bounds.Width / 2, zoomIn.Bounds.Height / 2),
             ZoomTestHarness.Window)!.Value;

@@ -13,7 +13,40 @@
         MinWidth="1040" MinHeight="700"
         Background="#E9EEF5"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <ControlTheme x:Key="MoreActionsMenuPresenterTheme" TargetType="MenuFlyoutPresenter"
+                      BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
+            <Setter Property="MinWidth" Value="172" />
+            <Setter Property="Padding" Value="0,4" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E4E7EF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+        </ControlTheme>
+        <ControlTheme x:Key="MoreActionsMenuItemTheme" TargetType="MenuItem"
+                      BasedOn="{StaticResource {x:Type MenuItem}}">
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#51596D" />
+            <Setter Property="FontSize" Value="12" />
+            <Style Selector="^:pointerover">
+                <Setter Property="Background" Value="#F0F3F9" />
+                <Setter Property="Foreground" Value="#424758" />
+            </Style>
+            <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+                <Setter Property="Background" Value="#F0F3F9" />
+            </Style>
+        </ControlTheme>
+    </Window.Resources>
     <Window.Styles>
+        <Style Selector="Button.plain-button">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.plain-button:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
         <Style Selector="Button.nav-button">
             <Setter Property="Width" Value="40" />
             <Setter Property="Height" Value="40" />
@@ -25,9 +58,38 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+        <Style Selector="Button.nav-home">
+            <Setter Property="Background" Value="#ECEFFC" />
+            <Setter Property="Foreground" Value="#6171D8" />
+        </Style>
         <Style Selector="Button.nav-button:pointerover">
-            <Setter Property="Background" Value="#EEF0F7" />
+            <Setter Property="Background" Value="#F0F3F9" />
             <Setter Property="Foreground" Value="#5F6FD6" />
+        </Style>
+        <Style Selector="Button.more-actions-button">
+            <Setter Property="Background" Value="#F8F9FB" />
+        </Style>
+        <Style Selector="Button.more-actions-button:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+        <Style Selector="Button.tab-select">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            ClipToBounds="True">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Padding="{TemplateBinding Padding}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.tab-select:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
         </Style>
         <Style Selector="Button.tab-close">
             <Setter Property="Width" Value="26" />
@@ -41,8 +103,11 @@
             <Setter Property="Foreground" Value="#9CA1B0" />
         </Style>
         <Style Selector="Button.tab-close:pointerover">
-            <Setter Property="Background" Value="#EEF0F5" />
+            <Setter Property="Background" Value="#F0F3F9" />
             <Setter Property="Foreground" Value="#555D73" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F3F9" />
         </Style>
     </Window.Styles>
 
@@ -65,8 +130,8 @@
 
                     <StackPanel Grid.Row="1" Spacing="10" Margin="0,28,0,0"
                                 HorizontalAlignment="Center" VerticalAlignment="Top">
-                        <Button Classes="nav-button" Command="{Binding ShowHomeCommand}"
-                                Background="#ECEFFC" Foreground="#6171D8" ToolTip.Tip="主页">
+                        <Button Classes="nav-button nav-home" Command="{Binding ShowHomeCommand}"
+                                ToolTip.Tip="主页">
                             <PathIcon Width="18" Height="18"
                                       Data="M3,11 L12,3 L21,11 L19,11 L19,21 L14,21 L14,15 L10,15 L10,21 L5,21 L5,11 Z" />
                         </Button>
@@ -84,7 +149,7 @@
 
             <Border Grid.Column="1" Background="#FFFFFF" BorderBrush="#ECEEF3" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Button Command="{Binding ShowHomeCommand}" Background="Transparent" BorderThickness="0"
+                    <Button Classes="plain-button" Command="{Binding ShowHomeCommand}" BorderThickness="0"
                             Padding="18,0" Cursor="Hand">
                         <StackPanel Spacing="0" Height="60">
                             <StackPanel Orientation="Horizontal" Spacing="8" Height="57" VerticalAlignment="Center">
@@ -108,11 +173,14 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:DocumentTabViewModel">
                                     <Border Width="220" Height="44" Margin="5,8,0,8" Padding="0"
-                                            Background="#F7F8FB" CornerRadius="10" x:CompileBindings="False">
+                                            Background="#F7F8FB" CornerRadius="10" ClipToBounds="True" x:CompileBindings="False">
                                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,3">
-                                            <Button Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
-                                                    CommandParameter="{Binding}" Background="Transparent"
-                                                    BorderThickness="0" Padding="12,0,4,0" HorizontalContentAlignment="Left">
+                                            <Button x:Name="TabSelectButton" Classes="tab-select" Grid.RowSpan="2" Grid.ColumnSpan="2"
+                                                    Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    BorderThickness="0" Padding="12,0,40,0" Cursor="Hand"
+                                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <Border Background="#E9ECFC" CornerRadius="5" Padding="4,2">
                                                         <TextBlock Text="P" FontSize="9" FontWeight="Bold" Foreground="#6C79D2" />
@@ -122,7 +190,7 @@
                                                                VerticalAlignment="Center" />
                                                 </StackPanel>
                                             </Button>
-                                            <Button Grid.Column="1" Classes="tab-close"
+                                            <Button Grid.Column="1" Grid.RowSpan="2" Classes="tab-close"
                                                     Margin="0,0,7,0" VerticalAlignment="Center"
                                                     Command="{Binding $parent[Window].DataContext.CloseDocumentCommand}"
                                                     CommandParameter="{Binding}" ToolTip.Tip="关闭">
@@ -143,10 +211,21 @@
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="12,0,18,0" Spacing="8">
                         <ProgressBar Width="64" Height="4" IsIndeterminate="True"
                                      IsVisible="{Binding IsOpening}" Foreground="#6C7BDD" />
-                        <Border Width="32" Height="32" CornerRadius="10" Background="#F4F5F9">
-                            <TextBlock Text="· · ·" FontSize="12" Foreground="#9298A8"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        <Button x:Name="MoreActionsButton" Classes="more-actions-button" Width="32" Height="32" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                CornerRadius="10" BorderThickness="0"
+                                Cursor="Hand" ToolTip.Tip="更多操作">
+                            <PathIcon Width="16" Height="16" Foreground="#9298A8"
+                                      Data="M4,10 A2,2 0 1,0 4,14 A2,2 0 1,0 4,10 M10,10 A2,2 0 1,0 10,14 A2,2 0 1,0 10,10 M16,10 A2,2 0 1,0 16,14 A2,2 0 1,0 16,10" />
+                            <Button.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight"
+                                            FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
+                                            ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
+                                    <MenuItem Header="打开新文件" Command="{Binding OpenPdfCommand}" />
+                                    <MenuItem Header="关闭所有标签页" Command="{Binding CloseAllDocumentsCommand}" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
