@@ -145,7 +145,36 @@ public sealed class PdfTextPage
         }
 
         if (current is not null) rects.Add(current.Value);
-        return rects;
+        return MergeOverlappingRects(rects);
+    }
+
+    private static IReadOnlyList<PdfRect> MergeOverlappingRects(IReadOnlyList<PdfRect> rects)
+    {
+        var merged = new List<PdfRect>(rects);
+        bool changed;
+        do
+        {
+            changed = false;
+            for (int first = 0; first < merged.Count && !changed; first++)
+            {
+                for (int second = first + 1; second < merged.Count; second++)
+                {
+                    PdfRect left = merged[first];
+                    PdfRect right = merged[second];
+                    double verticalOverlap = Math.Min(left.T, right.T) - Math.Max(left.B, right.B);
+                    bool sameVisualLine = verticalOverlap >= Math.Min(left.Height, right.Height) * 0.35;
+                    bool horizontalOverlap = right.L <= left.R + 0.5 && left.L <= right.R + 0.5;
+                    if (!sameVisualLine || !horizontalOverlap) continue;
+
+                    merged[first] = left.Union(right);
+                    merged.RemoveAt(second);
+                    changed = true;
+                    break;
+                }
+            }
+        } while (changed);
+
+        return merged;
     }
 
     public (int Start, int Count) GetWordRange(int characterIndex)

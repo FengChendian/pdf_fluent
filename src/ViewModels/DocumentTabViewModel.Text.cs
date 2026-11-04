@@ -6,7 +6,7 @@ namespace pdf_fluent.ViewModels;
 
 public sealed partial class DocumentTabViewModel
 {
-    private readonly Dictionary<int, Task<PdfTextPage>> _textLoadTasks = new();
+    private readonly Dictionary<int, TextLoadRequest> _textLoadTasks = new();
     private PdfTextRange? _selection;
 
     public event EventHandler? TextSelectionChanged;
@@ -23,48 +23,108 @@ public sealed partial class DocumentTabViewModel
     public PdfTextPage? GetLoadedText(int pageIndex) =>
         pageIndex >= 0 && pageIndex < Pages.Count ? Pages[pageIndex].Text : null;
 
-    public Task<PdfTextPage> GetTextPageAsync(int pageIndex)
+    public async Task<PdfTextPage> GetTextPageAsync(int pageIndex)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(DocumentTabViewModel));
         if (pageIndex < 0 || pageIndex >= Pages.Count)
             throw new ArgumentOutOfRangeException(nameof(pageIndex));
-        return EnsurePageTextAsync(Pages[pageIndex]);
+
+        while (true)
+        {
+            try
+            {
+                return await EnsurePageTextAsync(Pages[pageIndex], automatic: false);
+            }
+            catch (OperationCanceledException) when (!_disposed)
+            {
+            }
+        }
     }
 
-    private Task<PdfTextPage> EnsurePageTextAsync(PdfPageViewModel page)
+    private Task<PdfTextPage> EnsurePageTextAsync(PdfPageViewModel page, bool automatic)
     {
         if (page.Text is not null) return Task.FromResult(page.Text);
-        if (_textLoadTasks.TryGetValue(page.PageIndex, out Task<PdfTextPage>? pending)) return pending;
+        if (_textLoadTasks.TryGetValue(page.PageIndex, out TextLoadRequest? pending))
+        {
+            if (!automatic) pending.CancelWhenNotVisible = false;
+            return pending.Task;
+        }
 
-        Task<PdfTextPage> task = LoadAndPublishTextAsync(page);
-        _textLoadTasks[page.PageIndex] = task;
-        return task;
+        var request = new TextLoadRequest(page, automatic);
+        _textLoadTasks[page.PageIndex] = request;
+        request.Task = LoadAndPublishTextAsync(request);
+        return request.Task;
     }
 
-    private async Task<PdfTextPage> LoadAndPublishTextAsync(PdfPageViewModel page)
+    private async Task<PdfTextPage> LoadAndPublishTextAsync(TextLoadRequest request)
     {
+        PdfPageViewModel page = request.Page;
         try
         {
-            PdfTextPage text = await Task.Run(() => _pdfService.GetPageText(FilePath, page.PageIndex));
+            PdfTextPage text = await Task.Run(
+                () => _pdfService.GetPageText(
+                    FilePath, page.PageIndex, request.Cancellation.Token),
+                request.Cancellation.Token);
             if (!_disposed && page.PageIndex < Pages.Count && ReferenceEquals(Pages[page.PageIndex], page))
                 page.SetText(text);
             return text;
         }
         finally
         {
-            if (!_disposed) _textLoadTasks.Remove(page.PageIndex);
+            if (!_disposed &&
+                _textLoadTasks.TryGetValue(page.PageIndex, out TextLoadRequest? current) &&
+                ReferenceEquals(current, request))
+            {
+                _textLoadTasks.Remove(page.PageIndex);
+            }
+            request.Dispose();
         }
     }
 
     private async Task ObserveTextLoadAsync(PdfPageViewModel page)
     {
-        try
+        while (!_disposed && page.Text is null && _visiblePages.Contains(page))
         {
-            await EnsurePageTextAsync(page);
+            try
+            {
+                await EnsurePageTextAsync(page, automatic: true);
+                return;
+            }
+            catch (OperationCanceledException) when (!_disposed && _visiblePages.Contains(page))
+            {
+            }
+            catch (Exception) when (!_disposed)
+            {
+                return;
+            }
         }
-        catch (Exception) when (!_disposed)
+    }
+
+    private void CancelAutomaticTextLoadsExcept(IReadOnlySet<PdfPageViewModel> visiblePages)
+    {
+        foreach (TextLoadRequest request in _textLoadTasks.Values)
         {
+            if (request.CancelWhenNotVisible && !visiblePages.Contains(request.Page))
+                request.Cancellation.Cancel();
         }
+    }
+
+    private void CancelAutomaticTextLoad(PdfPageViewModel page)
+    {
+        if (_textLoadTasks.TryGetValue(page.PageIndex, out TextLoadRequest? request) &&
+            request.CancelWhenNotVisible)
+        {
+            request.Cancellation.Cancel();
+        }
+    }
+
+    private sealed class TextLoadRequest(PdfPageViewModel page, bool automatic) : IDisposable
+    {
+        public PdfPageViewModel Page { get; } = page;
+        public Task<PdfTextPage> Task { get; set; } = null!;
+        public CancellationTokenSource Cancellation { get; } = new();
+        public bool CancelWhenNotVisible { get; set; } = automatic;
+        public void Dispose() => Cancellation.Dispose();
     }
 
     public PdfTextHit? HitTestText(

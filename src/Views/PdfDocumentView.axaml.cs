@@ -24,6 +24,8 @@ public partial class PdfDocumentView : UserControl
     private TopLevel? _topLevel;
     private IDisposable? _renderScalingTimer;
     private IDisposable? _pageIndicatorTimer;
+    private DocumentTabViewModel? _observedDocument;
+    private Vector? _scrollOffsetToRestore;
     private int _lastObservedPageNumber = 1;
     private int? _pendingPageIndex;
 
@@ -31,6 +33,7 @@ public partial class PdfDocumentView : UserControl
     {
         InitializeComponent();
         InitializeTextInteraction();
+        DocumentScroller.ScrollChanged += OnDocumentScrollChanged;
         AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
     }
 
@@ -41,15 +44,22 @@ public partial class PdfDocumentView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        AttachTextDocument(DataContext as DocumentTabViewModel);
+        var document = DataContext as DocumentTabViewModel;
+        _observedDocument ??= document;
+        if (document is not null) _scrollOffsetToRestore ??= document.ScrollOffset;
+        AttachTextDocument(document);
         AttachRenderScaling();
     }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
+        CaptureScrollOffset();
+        var document = DataContext as DocumentTabViewModel;
+        _observedDocument = document;
+        _scrollOffsetToRestore = document?.ScrollOffset;
         HidePageIndicator();
-        AttachTextDocument(DataContext as DocumentTabViewModel);
-        _lastObservedPageNumber = (DataContext as DocumentTabViewModel)?.CurrentPage ?? 1;
+        AttachTextDocument(document);
+        _lastObservedPageNumber = document?.CurrentPage ?? 1;
         _pendingPageIndex = null;
         ResetZoomController();
         base.OnDataContextChanged(e);
@@ -58,11 +68,24 @@ public partial class PdfDocumentView : UserControl
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        CaptureScrollOffset();
+        _observedDocument = null;
+        _scrollOffsetToRestore = null;
         DetachRenderScaling();
         DetachTextInteraction();
         HidePageIndicator();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);
+    }
+
+    private void CaptureScrollOffset()
+    {
+        if (_scrollOffsetToRestore is null) _observedDocument?.UpdateScrollOffset(DocumentScroller.Offset);
+    }
+
+    private void OnDocumentScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_scrollOffsetToRestore is null) _observedDocument?.UpdateScrollOffset(DocumentScroller.Offset);
     }
 
     private void ResetZoomController()
@@ -220,6 +243,22 @@ public partial class PdfDocumentView : UserControl
         }
     }
 
+    private void RestoreScrollOffset(DocumentTabViewModel document)
+    {
+        if (_scrollOffsetToRestore is not Vector offset ||
+            document.PageCount == 0 || DocumentScroller.Extent.Height <= 0)
+        {
+            return;
+        }
+
+        _scrollOffsetToRestore = null;
+        double maxX = Math.Max(0, DocumentScroller.Extent.Width - DocumentScroller.Viewport.Width);
+        double maxY = Math.Max(0, DocumentScroller.Extent.Height - DocumentScroller.Viewport.Height);
+        DocumentScroller.Offset = new Vector(
+            Math.Clamp(offset.X, 0, maxX),
+            Math.Clamp(offset.Y, 0, maxY));
+    }
+
     private void OnPagesLayoutUpdated(object? sender, EventArgs e)
     {
         EnsureZoomController();
@@ -230,6 +269,7 @@ public partial class PdfDocumentView : UserControl
             return;
         }
 
+        RestoreScrollOffset(document);
         var panel = itemsControl.GetVisualDescendants().OfType<PdfVirtualizingPanel>().FirstOrDefault();
         List<PdfPageViewModel> realizedPages = [];
         List<PdfPageViewModel> visiblePages = [];

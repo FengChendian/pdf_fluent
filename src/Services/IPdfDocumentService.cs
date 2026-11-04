@@ -7,7 +7,10 @@ public interface IPdfDocumentService
 {
     (double Width, double Height)[] GetPageSizes(string filePath);
 
-    PdfTextPage GetPageText(string filePath, int pageNumber);
+    PdfTextPage GetPageText(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default);
 
     WriteableBitmap RenderPageToWriteableBitmap(
         string filePath,

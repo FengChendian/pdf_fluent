@@ -6,11 +6,15 @@ namespace pdf_fluent.Tests;
 internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
 {
     private readonly ManualResetEventSlim _renderGate = new(false);
+    private readonly ManualResetEventSlim _textGate = new(true);
     private readonly TaskCompletionSource _renderStarted = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _textLoadStarted = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<int> _renderedPages = new();
     private readonly List<float> _renderScales = new();
     private readonly List<int> _textPages = new();
+    private int _textLoadCancellationCount;
     private readonly bool _scaleRenderSize;
     private readonly int _pageCount;
     private readonly int _renderWidth;
@@ -62,6 +66,9 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         }
     }
 
+    public Task TextLoadStarted => _textLoadStarted.Task;
+    public int TextLoadCancellationCount => Volatile.Read(ref _textLoadCancellationCount);
+
     public (double Width, double Height)[] GetPageSizes(string filePath) =>
         Enumerable.Range(0, _pageCount)
             .Select(index => ((double)600, (double)(800 + index % 3 * 100)))
@@ -93,9 +100,23 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
             Avalonia.Platform.AlphaFormat.Premul);
     }
 
-    public PdfTextPage GetPageText(string filePath, int pageNumber)
+    public PdfTextPage GetPageText(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_textPages) _textPages.Add(pageNumber);
+        _textLoadStarted.TrySetResult();
+        try
+        {
+            _textGate.Wait(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            Interlocked.Increment(ref _textLoadCancellationCount);
+            throw;
+        }
         double height = 800 + pageNumber % 3 * 100;
         const string text = "PDF text";
         PdfTextCharacter[] characters = text.Select((character, index) => new PdfTextCharacter(
@@ -137,10 +158,14 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
 
     public void BlockRenders() => _renderGate.Reset();
     public void AllowRenders() => _renderGate.Set();
+    public void BlockTextLoads() => _textGate.Reset();
+    public void AllowTextLoads() => _textGate.Set();
 
     public void Dispose()
     {
         _renderGate.Set();
+        _textGate.Set();
         _renderGate.Dispose();
+        _textGate.Dispose();
     }
 }

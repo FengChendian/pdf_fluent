@@ -77,10 +77,14 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     private double _renderScaling = 1;
     private double _appliedScaling = 1;
 
-    public DocumentTabViewModel(string filePath, IPdfDocumentService pdfService)
+    public DocumentTabViewModel(
+        string filePath,
+        IPdfDocumentService pdfService,
+        Avalonia.Vector? scrollOffset = null)
     {
         FilePath = filePath;
         _pdfService = pdfService;
+        UpdateScrollOffset(scrollOffset ?? default);
         _ = RenderWorkerAsync();
     }
 
@@ -205,10 +209,11 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _realizedPages.Add(page);
-        if (isVisible) _ = ObserveTextLoadAsync(page);
-        if (isVisible) _ = ObserveHighlightLoadAsync(page);
         if (isVisible) _visiblePages.Add(page);
         else _visiblePages.Remove(page);
+        if (isVisible) _ = ObserveTextLoadAsync(page);
+        else CancelAutomaticTextLoad(page);
+        if (isVisible) _ = ObserveHighlightLoadAsync(page);
         page.SetZoom(_zoom, notify: true);
 
         if (page.Image is not null && IsRenderedAtCurrentScale(page))
@@ -225,6 +230,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     {
         _realizedPages.Remove(page);
         _visiblePages.Remove(page);
+        CancelAutomaticTextLoad(page);
         if (_renderRequests.TryGetValue(page.PageIndex, out RenderRequest? request))
         {
             if (request.State == RenderRequestState.Queued) RemoveRenderRequest(request);
@@ -251,6 +257,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         foreach (PdfPageViewModel page in realizedPages) _realizedPages.Add(page);
         _visiblePages.Clear();
         foreach (PdfPageViewModel page in visiblePages ?? realizedPages) _visiblePages.Add(page);
+        CancelAutomaticTextLoadsExcept(_visiblePages);
         foreach (PdfPageViewModel page in _visiblePages)
         {
             _ = ObserveTextLoadAsync(page);
@@ -651,6 +658,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         CancelAllRenders();
         _realizedPages.Clear();
         _visiblePages.Clear();
+        CancelAutomaticTextLoadsExcept(_visiblePages);
         ClearBitmaps();
         _renderZoom = _zoom;
         _appliedScaling = _renderScaling;

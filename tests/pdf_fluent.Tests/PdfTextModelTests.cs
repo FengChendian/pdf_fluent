@@ -75,6 +75,24 @@ public sealed class PdfTextModelTests
     }
 
     [Fact]
+    public void GeometryMergesOverlappingIntervalsAfterCharacterSplitting()
+    {
+        var page = new PdfTextPage(0, new PdfRect(0, 120, 200, 0),
+        [
+            Character(0, 'A', 0, 110),
+            new PdfTextCharacter(
+                1,
+                ' ',
+                new PdfRect(10, 110, 30, 100),
+                new PdfRect(10, 111, 30, 99)),
+            Character(2, 'B', 15, 110),
+        ]);
+
+        PdfRect rect = Assert.Single(page.GetMergedRects(0, 3));
+        Assert.Equal(new PdfRect(0, 110, 30, 100), rect);
+    }
+
+    [Fact]
     public void BackwardCrossPageRangeSelectsWholeIntermediatePages()
     {
         var range = new PdfTextRange(

@@ -360,4 +360,62 @@ public sealed class DocumentTabViewModelTests
             Assert.Throws<ObjectDisposedException>(() => bitmap.Lock()));
     }
 
+    [AvaloniaFact]
+    public async Task LeavingViewportCancelsAutomaticTextLoad()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        service.BlockTextLoads();
+        PdfPageViewModel page = document.Pages[0];
+
+        try
+        {
+            document.EnsurePageRendered(page);
+            await service.TextLoadStarted.WaitAsync(TimeSpan.FromSeconds(2));
+
+            document.SyncRealizedPages(new[] { page }, Array.Empty<PdfPageViewModel>());
+            await WaitUntilAsync(() => service.TextLoadCancellationCount == 1);
+            service.AllowTextLoads();
+
+            document.SyncRealizedPages(new[] { page });
+            await WaitUntilAsync(() => page.Text is not null);
+
+            Assert.Equal(new[] { 0, 0 }, service.TextPages);
+        }
+        finally
+        {
+            service.AllowTextLoads();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ExplicitTextRequestSurvivesLeavingViewport()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        service.BlockTextLoads();
+        PdfPageViewModel page = document.Pages[0];
+
+        try
+        {
+            document.EnsurePageRendered(page);
+            await service.TextLoadStarted.WaitAsync(TimeSpan.FromSeconds(2));
+            var requested = document.GetTextPageAsync(0);
+
+            document.ReleasePage(page);
+            service.AllowTextLoads();
+            await requested.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.NotNull(page.Text);
+            Assert.Equal(0, service.TextLoadCancellationCount);
+            Assert.Equal(new[] { 0 }, service.TextPages);
+        }
+        finally
+        {
+            service.AllowTextLoads();
+        }
+    }
+
 }

@@ -477,14 +477,20 @@ namespace pdf_fluent.Services
         /// remain the canonical reading-order positions used by selection,
         /// copying, search results and text-markup annotations.
         /// </summary>
-        public PdfTextPage GetPageText(string filePath, int pageIndex)
+        public PdfTextPage GetPageText(
+            string filePath,
+            int pageIndex,
+            CancellationToken cancellationToken = default)
         {
+            PdfTextCharacter[] characters;
+            PdfRect cropBox;
             lock (_pageLock)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 FpdfTextpageT textPage = LoadTextPage(filePath, pageIndex);
                 int count = Math.Max(0, fpdf_text.FPDFTextCountChars(textPage));
-                var characters = new PdfTextCharacter[count];
+                characters = new PdfTextCharacter[count];
                 for (int index = 0; index < count; index++)
                 {
                     double left = 0, right = 0, bottom = 0, top = 0;
@@ -504,14 +510,14 @@ namespace pdf_fluent.Services
                         index,
                         fpdf_text.FPDFTextGetUnicode(textPage, index),
                         bounds,
-                        looseBounds,
-                        fpdf_text.FPDFTextIsGenerated(textPage, index) == 1);
+                        looseBounds);
                 }
 
-                var result = new PdfTextPage(pageIndex, GetVisiblePageBox(filePath, pageIndex), characters);
+                cropBox = GetVisiblePageBox(filePath, pageIndex);
                 ReleaseTextPage(filePath, pageIndex);
-                return result;
             }
+
+            return new PdfTextPage(pageIndex, cropBox, characters);
         }
 
         private PdfRect GetVisiblePageBox(string filePath, int pageIndex)

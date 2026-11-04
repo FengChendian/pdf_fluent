@@ -1,3 +1,4 @@
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace pdf_fluent.ViewModels;
@@ -10,11 +11,19 @@ public sealed partial class DocumentTabViewModel
     [ObservableProperty]
     private bool _isFavorite;
 
+    public Vector ScrollOffset { get; private set; }
+
     public string PageIndicator => $"{CurrentPage} / {PageCount}";
     public string FloatingPageIndicator => $"第 {CurrentPage} 页 / 共 {PageCount} 页";
     public bool CanGoToPreviousPage => PageCount > 0 && CurrentPage > 1;
     public bool CanGoToNextPage => PageCount > 0 && CurrentPage < PageCount;
     public string FavoriteToolTip => IsFavorite ? "取消收藏" : "收藏文档";
+
+    public void UpdateScrollOffset(Vector offset)
+    {
+        if (!double.IsFinite(offset.X) || !double.IsFinite(offset.Y)) return;
+        ScrollOffset = new Vector(Math.Max(0, offset.X), Math.Max(0, offset.Y));
+    }
 
     internal void UpdateCurrentPage(IReadOnlyCollection<PdfPageViewModel> visiblePages)
     {

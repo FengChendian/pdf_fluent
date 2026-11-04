@@ -74,11 +74,12 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _searchText = string.Empty;
 
-    partial void OnSelectedDocumentChanged(DocumentTabViewModel? value)
+    partial void OnSelectedDocumentChanged(DocumentTabViewModel? oldValue, DocumentTabViewModel? newValue)
     {
-        if (value is not null) IsFavoritesSelected = false;
+        if (oldValue is not null) SaveReadingPosition(oldValue);
+        if (newValue is not null) IsFavoritesSelected = false;
         foreach (var document in OpenDocuments)
-            document.IsSelected = ReferenceEquals(document, value);
+            document.IsSelected = ReferenceEquals(document, newValue);
         OnPropertyChanged(nameof(IsLibraryOpen));
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsDocumentOpen));
@@ -146,7 +147,9 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
 
         IsOpening = true;
         StatusMessage = null;
-        var document = new DocumentTabViewModel(filePath, _pdfService)
+        RecentDocumentViewModel? recent = RecentDocuments.FirstOrDefault(d =>
+            string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+        var document = new DocumentTabViewModel(filePath, _pdfService, recent?.ScrollOffset)
         {
             IsFavorite = FavoriteDocuments.Any(d =>
                 string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase)),
@@ -215,6 +218,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         if (!await ConfirmCloseAllDocumentsAsync()) return;
         DocumentTabViewModel[] documents = OpenDocuments.ToArray();
         SelectedDocument = null;
+        foreach (DocumentTabViewModel document in documents) SaveReadingPosition(document);
         OpenDocuments.Clear();
         foreach (DocumentTabViewModel document in documents) document.Dispose();
     }
@@ -257,6 +261,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
                 : null;
         }
 
+        SaveReadingPosition(document);
         OpenDocuments.Remove(document);
         document.Dispose();
     }
@@ -316,6 +321,8 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             FilePath = document.FilePath,
             PageCount = document.PageCount,
             LastOpened = DateTimeOffset.Now,
+            ScrollOffsetX = document.ScrollOffset.X,
+            ScrollOffsetY = document.ScrollOffset.Y,
             Thumbnail = thumbnail,
         }, RemoveRecentDocumentCommand));
 
@@ -330,6 +337,16 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         RefreshVisibleRecentDocuments();
         OnPropertyChanged(nameof(HasRecentDocuments));
         OnPropertyChanged(nameof(HasNoRecentDocuments));
+    }
+
+    private void SaveReadingPosition(DocumentTabViewModel document)
+    {
+        RecentDocumentViewModel? recent = RecentDocuments.FirstOrDefault(d =>
+            string.Equals(d.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase));
+        if (recent is null) return;
+
+        recent.UpdateScrollOffset(document.ScrollOffset);
+        _recentService.Save(RecentDocuments.Select(d => d.ToModel()));
     }
 
     private async Task<byte[]?> CreateRecentThumbnailAsync(string filePath)
@@ -352,6 +369,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        foreach (var document in OpenDocuments) SaveReadingPosition(document);
         foreach (var document in OpenDocuments) document.Dispose();
         foreach (var document in RecentDocuments) document.Dispose();
         foreach (var document in FavoriteDocuments) document.Dispose();
