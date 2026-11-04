@@ -42,6 +42,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     public Func<Task<string?>>? PdfFilePicker { get; set; }
+    public Func<DocumentTabViewModel, Task<DocumentCloseDecision>>? DocumentCloseConfirmation { get; set; }
     public ObservableCollection<DocumentTabViewModel> OpenDocuments { get; } = [];
     public ObservableCollection<RecentDocumentViewModel> RecentDocuments { get; } = [];
     public ObservableCollection<RecentDocumentViewModel> VisibleRecentDocuments { get; } = [];
@@ -201,12 +202,54 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void CloseDocument(DocumentTabViewModel? document)
+    private async Task CloseDocumentAsync(DocumentTabViewModel? document)
     {
-        if (document is null) return;
-        int index = OpenDocuments.IndexOf(document);
-        if (index < 0) return;
+        if (document is null || !OpenDocuments.Contains(document)) return;
+        if (!await ConfirmDocumentCloseAsync(document)) return;
+        CloseDocumentCore(document);
+    }
 
+    [RelayCommand]
+    private async Task CloseAllDocumentsAsync()
+    {
+        if (!await ConfirmCloseAllDocumentsAsync()) return;
+        DocumentTabViewModel[] documents = OpenDocuments.ToArray();
+        SelectedDocument = null;
+        OpenDocuments.Clear();
+        foreach (DocumentTabViewModel document in documents) document.Dispose();
+    }
+
+    public async Task<bool> ConfirmCloseAllDocumentsAsync()
+    {
+        foreach (DocumentTabViewModel document in OpenDocuments.ToArray())
+        {
+            if (!await ConfirmDocumentCloseAsync(document)) return false;
+        }
+        return true;
+    }
+
+    private async Task<bool> ConfirmDocumentCloseAsync(DocumentTabViewModel document)
+    {
+        if (!document.HasUnsavedHighlights) return true;
+        if (DocumentCloseConfirmation is null) return false;
+
+        DocumentCloseDecision decision = await DocumentCloseConfirmation(document);
+        switch (decision)
+        {
+            case DocumentCloseDecision.Discard:
+                return true;
+            case DocumentCloseDecision.Save:
+                bool saved = await document.SaveHighlightsAsync();
+                if (!saved) StatusMessage = document.HighlightErrorMessage;
+                return saved;
+            default:
+                return false;
+        }
+    }
+
+    private void CloseDocumentCore(DocumentTabViewModel document)
+    {
+        int index = OpenDocuments.IndexOf(document);
         if (ReferenceEquals(SelectedDocument, document))
         {
             SelectedDocument = OpenDocuments.Count > 1
@@ -216,15 +259,6 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
 
         OpenDocuments.Remove(document);
         document.Dispose();
-    }
-
-    [RelayCommand]
-    private void CloseAllDocuments()
-    {
-        DocumentTabViewModel[] documents = OpenDocuments.ToArray();
-        SelectedDocument = null;
-        OpenDocuments.Clear();
-        foreach (DocumentTabViewModel document in documents) document.Dispose();
     }
 
     [RelayCommand]

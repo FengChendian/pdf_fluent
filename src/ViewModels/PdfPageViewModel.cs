@@ -1,5 +1,6 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using pdf_fluent.Models;
 
 namespace pdf_fluent.ViewModels;
 
@@ -12,6 +13,7 @@ public sealed partial class PdfPageViewModel : ViewModelBase
     private readonly double _baseHeight;
     private double _zoom;
     private WriteableBitmap? _image;
+    private PdfTextPage? _text;
 
     public PdfPageViewModel(int pageIndex, double widthInPoints, double heightInPoints, double zoom)
     {
@@ -56,6 +58,20 @@ public sealed partial class PdfPageViewModel : ViewModelBase
     /// there is no bitmap.
     /// </summary>
     public double RenderedScale { get; private set; } = double.NaN;
+
+    public PdfTextPage? Text
+    {
+        get => _text;
+        private set
+        {
+            if (ReferenceEquals(_text, value)) return;
+            _text = value;
+            OnPropertyChanged();
+            NotifyTextOverlayChanged();
+        }
+    }
+
+    public int TextOverlayVersion { get; private set; }
 
     /// <summary>
     /// Current bitmap. It stays in place while the page is re-rendered for a
@@ -114,6 +130,15 @@ public sealed partial class PdfPageViewModel : ViewModelBase
         OnPropertyChanged(nameof(PageHeight));
         OnPropertyChanged(nameof(ItemWidth));
         OnPropertyChanged(nameof(ItemHeight));
+        NotifyTextOverlayChanged();
+    }
+
+    public void SetText(PdfTextPage text) => Text = text;
+
+    public void NotifyTextOverlayChanged()
+    {
+        TextOverlayVersion++;
+        OnPropertyChanged(nameof(TextOverlayVersion));
     }
 
     public void SetImage(WriteableBitmap bitmap, double renderedScale)

@@ -472,6 +472,77 @@ namespace pdf_fluent.Services
             }
         }
 
+        /// <summary>
+        /// Extracts immutable managed text and geometry. PDFium character indices
+        /// remain the canonical reading-order positions used by selection,
+        /// copying, search results and text-markup annotations.
+        /// </summary>
+        public PdfTextPage GetPageText(string filePath, int pageIndex)
+        {
+            lock (_pageLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                FpdfTextpageT textPage = LoadTextPage(filePath, pageIndex);
+                int count = Math.Max(0, fpdf_text.FPDFTextCountChars(textPage));
+                var characters = new PdfTextCharacter[count];
+                for (int index = 0; index < count; index++)
+                {
+                    double left = 0, right = 0, bottom = 0, top = 0;
+                    PdfRect bounds = fpdf_text.FPDFTextGetCharBox(
+                        textPage, index, ref left, ref right, ref bottom, ref top) != 0
+                        ? new PdfRect(left, top, right, bottom)
+                        : default;
+
+                    PdfRect looseBounds = bounds;
+                    using (var loose = new FS_RECTF_())
+                    {
+                        if (fpdf_text.FPDFTextGetLooseCharBox(textPage, index, loose) != 0)
+                            looseBounds = new PdfRect(loose.Left, loose.Top, loose.Right, loose.Bottom);
+                    }
+
+                    characters[index] = new PdfTextCharacter(
+                        index,
+                        fpdf_text.FPDFTextGetUnicode(textPage, index),
+                        bounds,
+                        looseBounds,
+                        fpdf_text.FPDFTextIsGenerated(textPage, index) == 1);
+                }
+
+                var result = new PdfTextPage(pageIndex, GetVisiblePageBox(filePath, pageIndex), characters);
+                ReleaseTextPage(filePath, pageIndex);
+                return result;
+            }
+        }
+
+        private PdfRect GetVisiblePageBox(string filePath, int pageIndex)
+        {
+            var document = GetOrLoadDocument(filePath);
+            var page = fpdfview.FPDF_LoadPage(document, pageIndex)
+                       ?? throw new InvalidOperationException($"无法加载 PDF 第 {pageIndex + 1} 页。");
+            try
+            {
+                float left = 0, bottom = 0, right = 0, top = 0;
+                if (fpdf_transformpage.FPDFPageGetCropBox(page, ref left, ref bottom,
+                        ref right, ref top) == 0)
+                {
+                    fpdf_transformpage.FPDFPageGetMediaBox(page, ref left, ref bottom,
+                        ref right, ref top);
+                }
+
+                if (right <= left || top <= bottom)
+                {
+                    double width = 0, height = 0;
+                    fpdfview.FPDF_GetPageSizeByIndex(document, pageIndex, ref width, ref height);
+                    return new PdfRect(0, height, width, 0);
+                }
+                return new PdfRect(left, top, right, bottom);
+            }
+            finally
+            {
+                fpdfview.FPDF_ClosePage(page);
+            }
+        }
+
         // ── Lightweight wrappers (delegate directly to fpdf_text) ─────
 
         public static int TextGetCharIndexAtPos(FpdfTextpageT textPage, double x, double y, double xTol, double yTol)

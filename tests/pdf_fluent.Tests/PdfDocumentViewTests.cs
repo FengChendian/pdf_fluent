@@ -397,7 +397,8 @@ public sealed class PdfDocumentViewTests
             window.Show();
             window.UpdateLayout();
 
-            foreach (string name in new[] { "SearchButton", "AnnotationButton", "DownloadButton" })
+            Assert.True(view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SearchButton").IsEnabled);
+            foreach (string name in new[] { "AnnotationButton", "DownloadButton" })
             {
                 Button button = view.GetVisualDescendants().OfType<Button>()
                     .Single(candidate => candidate.Name == name);

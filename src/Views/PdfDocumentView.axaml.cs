@@ -30,6 +30,7 @@ public partial class PdfDocumentView : UserControl
     public PdfDocumentView()
     {
         InitializeComponent();
+        InitializeTextInteraction();
         AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
     }
 
@@ -40,12 +41,14 @@ public partial class PdfDocumentView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        AttachTextDocument(DataContext as DocumentTabViewModel);
         AttachRenderScaling();
     }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         HidePageIndicator();
+        AttachTextDocument(DataContext as DocumentTabViewModel);
         _lastObservedPageNumber = (DataContext as DocumentTabViewModel)?.CurrentPage ?? 1;
         _pendingPageIndex = null;
         ResetZoomController();
@@ -56,6 +59,7 @@ public partial class PdfDocumentView : UserControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         DetachRenderScaling();
+        DetachTextInteraction();
         HidePageIndicator();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);

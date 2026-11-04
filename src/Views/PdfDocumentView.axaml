@@ -60,6 +60,28 @@
         <Style Selector="Button.tool-button:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+        <Style Selector="ToggleButton.tool-button">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Foreground" Value="#666D80" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="ToggleButton.tool-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F2F8" />
+        </Style>
+        <Style Selector="ToggleButton.tool-button:checked">
+            <Setter Property="Background" Value="#E8E3FF" />
+            <Setter Property="Foreground" Value="#6C5CE7" />
+        </Style>
+        <Style Selector="ToggleButton.tool-button:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E8E3FF" />
+        </Style>
         <Style Selector="Border.page-surface">
             <Setter Property="BoxShadow" Value="0 4 22 0 #14000000" />
         </Style>
@@ -73,7 +95,7 @@
     </UserControl.Styles>
 
     <Grid Background="#EEF1F8">
-        <ScrollViewer x:Name="DocumentScroller"
+        <ScrollViewer x:Name="DocumentScroller" Focusable="True"
                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="PageItems" ItemsSource="{Binding Pages}"
                           ContainerPrepared="OnContainerPrepared"
@@ -89,12 +111,15 @@
                     <DataTemplate DataType="vm:PdfPageViewModel">
                         <Grid Width="{Binding ItemWidth}" Height="{Binding ItemHeight}"
                               HorizontalAlignment="Center">
-                            <Border Width="{Binding PageWidth}" Height="{Binding PageHeight}"
+                            <Border x:Name="PageSurface" Width="{Binding PageWidth}" Height="{Binding PageHeight}"
                                     Classes="page-surface" VerticalAlignment="Top"
                                     Background="#FFFFFF" CornerRadius="2" ClipToBounds="True">
                                 <Grid>
                                     <Image Source="{Binding Image}" Stretch="Uniform"
                                            RenderOptions.BitmapInterpolationMode="LowQuality" />
+                                    <controls:PdfPageOverlay Page="{Binding}"
+                                                             Document="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                             IsHitTestVisible="False" />
                                     <ProgressBar Width="120" Height="4" IsIndeterminate="True"
                                                  Foreground="#6C5CE7" HorizontalAlignment="Center"
                                                  VerticalAlignment="Center"
@@ -140,10 +165,15 @@
                 </Grid>
 
                 <Border Width="1" Height="20" Background="#ECECF2" VerticalAlignment="Center" Margin="3,0" />
-                <Button x:Name="SearchButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="文档内搜索（即将推出）">
+                <Button x:Name="SearchButton" Classes="tool-button" Click="OnSearchClick" ToolTip.Tip="文档内搜索（Ctrl+F）">
                     <i:Icon Value="fa-solid fa-magnifying-glass" FontSize="14"
                             Foreground="{Binding $parent[Button].Foreground}" />
                 </Button>
+                <ToggleButton x:Name="HighlightButton" Classes="tool-button" Width="33"
+                              IsChecked="{Binding IsHighlightMode}" ToolTip.Tip="高亮文本：拖动选择，单击选择单词">
+                    <i:Icon Value="fa-solid fa-highlighter" FontSize="14"
+                            Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                </ToggleButton>
                 <Button x:Name="AnnotationButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="画笔批注（即将推出）">
                     <i:Icon Value="fa-solid fa-pen" FontSize="14"
                             Foreground="{Binding $parent[Button].Foreground}" />
@@ -191,6 +221,48 @@
                             Foreground="{Binding $parent[Button].Foreground}" />
                 </Button>
             </StackPanel>
+        </Border>
+
+        <Border x:Name="SearchPanel" Classes="reader-pill" Width="320" MaxHeight="480"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,64,20,0"
+                Padding="12" IsVisible="{Binding IsSearchPanelVisible}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="文档内搜索" FontSize="14" FontWeight="SemiBold" Foreground="#424758" />
+                    <Button x:Name="CloseSearchButton" Grid.Column="1" Classes="tool-button"
+                            Width="26" Height="26" Click="OnCloseSearchClick" ToolTip.Tip="关闭搜索">
+                        <i:Icon Value="fa-solid fa-xmark" FontSize="12"
+                                Foreground="{Binding $parent[Button].Foreground}" />
+                    </Button>
+                </Grid>
+                <TextBox x:Name="SearchTextBox" Grid.Row="1" Text="{Binding SearchQuery}"
+                         PlaceholderText="输入关键词…" CornerRadius="8" MinHeight="34" />
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="6">
+                    <TextBlock Text="{Binding SearchStatus}" FontSize="11" Foreground="#858B9A" />
+                    <ListBox x:Name="SearchResultsList" Grid.Row="1" ItemsSource="{Binding SearchResults}"
+                             SelectionChanged="OnSearchResultSelected" BorderThickness="0" Background="Transparent"
+                             MinHeight="36" MaxHeight="340">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="3" Margin="2,4">
+                                    <TextBlock Text="{Binding PageLabel}" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#6C5CE7" />
+                                    <TextBlock Text="{Binding Context}" FontSize="12" Foreground="#51596D"
+                                               TextWrapping="Wrap" MaxWidth="270" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+                <TextBlock Grid.Row="3" Text="{Binding HighlightErrorMessage}" TextWrapping="Wrap"
+                           FontSize="11" Foreground="#B45D68"
+                           IsVisible="{Binding HighlightErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Grid>
         </Border>
 
         <Border x:Name="PageIndicatorOverlay" Background="#F2FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"

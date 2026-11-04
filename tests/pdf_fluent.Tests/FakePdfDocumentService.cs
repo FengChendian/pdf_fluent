@@ -1,3 +1,4 @@
+using pdf_fluent.Models;
 using pdf_fluent.Services;
 
 namespace pdf_fluent.Tests;
@@ -9,6 +10,7 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<int> _renderedPages = new();
     private readonly List<float> _renderScales = new();
+    private readonly List<int> _textPages = new();
     private readonly bool _scaleRenderSize;
     private readonly int _pageCount;
     private readonly int _renderWidth;
@@ -52,6 +54,14 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         }
     }
 
+    public int[] TextPages
+    {
+        get
+        {
+            lock (_textPages) return _textPages.ToArray();
+        }
+    }
+
     public (double Width, double Height)[] GetPageSizes(string filePath) =>
         Enumerable.Range(0, _pageCount)
             .Select(index => ((double)600, (double)(800 + index % 3 * 100)))
@@ -81,6 +91,36 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
             new Avalonia.Vector(96, 96),
             Avalonia.Platform.PixelFormat.Bgra8888,
             Avalonia.Platform.AlphaFormat.Premul);
+    }
+
+    public PdfTextPage GetPageText(string filePath, int pageNumber)
+    {
+        lock (_textPages) _textPages.Add(pageNumber);
+        double height = 800 + pageNumber % 3 * 100;
+        const string text = "PDF text";
+        PdfTextCharacter[] characters = text.Select((character, index) => new PdfTextCharacter(
+            index,
+            character,
+            new PdfRect(20 + index * 10, 750, 30 + index * 10, 738),
+            new PdfRect(19 + index * 10, 751, 31 + index * 10, 737))).ToArray();
+        return new PdfTextPage(
+            pageNumber,
+            new PdfRect(0, height, 600, 0),
+            characters);
+    }
+
+    public List<PdfHighlight> InitialHighlights { get; } = [];
+    public int SaveCallCount { get; private set; }
+
+    public List<PdfHighlight> LoadHighlights(string filePath) => InitialHighlights.ToList();
+
+    public void SaveHighlightsToTemp(
+        string filePath,
+        IReadOnlyList<PdfHighlight> highlights,
+        string tempPath)
+    {
+        SaveCallCount++;
+        File.WriteAllBytes(tempPath, []);
     }
 
     public void ReleaseDocument(string filePath)

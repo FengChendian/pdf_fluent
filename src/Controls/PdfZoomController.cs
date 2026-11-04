@@ -42,8 +42,8 @@ namespace pdf_fluent.Controls;
 /// while the animation runs pointer coordinates describe the committed layout
 /// rather than the scaled pixels.  The controller maps a re-target anchor back
 /// into that layout with its logical clock (see
-/// <see cref="ToLayoutViewportPoint"/>); pages carry no interactive content, so
-/// nothing else depends on the scaled position.
+/// <see cref="ToLayoutViewportPoint"/>); overlays use committed layout zoom because
+/// the composition transform scales them with the page instead of applying zoom twice.
 /// </para>
 /// <para>
 /// Rapid target changes do not restart the full 210 ms curve each time: a
