@@ -17,6 +17,90 @@ namespace pdf_fluent.Tests;
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
+    public void PagePaletteAndTabBrushesMatchTheRequestedColors()
+    {
+        using var viewModel = new MainViewModel();
+        using var firstService = new FakePdfDocumentService(1);
+        using var secondService = new FakePdfDocumentService(1);
+        var first = new DocumentTabViewModel("first.pdf", firstService);
+        var second = new DocumentTabViewModel("second.pdf", secondService);
+        viewModel.OpenDocuments.Add(first);
+        viewModel.OpenDocuments.Add(second);
+        viewModel.SelectedDocument = first;
+
+        var window = new MainWindow { DataContext = viewModel };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+
+            Border sidebar = window.GetVisualDescendants().OfType<Border>()
+                .Single(border => border.Name == "Sidebar");
+            HomeView home = window.GetVisualDescendants().OfType<HomeView>().Single();
+            Assert.Equal(Color.Parse("#F6F7FC"), Assert.IsAssignableFrom<ISolidColorBrush>(sidebar.Background).Color);
+            Assert.Equal(Color.Parse("#F8FAFE"), Assert.IsAssignableFrom<ISolidColorBrush>(home.Background).Color);
+
+            Button homeTab = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Name == "HomeTopTab");
+            Assert.Equal(Color.Parse("#F0F2F8"), Assert.IsAssignableFrom<ISolidColorBrush>(homeTab.Background).Color);
+            Point homeTabCenter = homeTab.TranslatePoint(
+                new Point(homeTab.Bounds.Width / 2, homeTab.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(homeTabCenter);
+            Assert.Equal(Color.Parse("#E4E7F0"), Assert.IsAssignableFrom<ISolidColorBrush>(homeTab.Background).Color);
+            Avalonia.Controls.Presenters.ContentPresenter homeTabSurface = homeTab.GetVisualChildren()
+                .OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single();
+            Assert.Equal(
+                Color.Parse("#E4E7F0"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(homeTabSurface.Background).Color);
+
+            Button documentTab = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Name == "TabSelectButton" && ReferenceEquals(button.DataContext, second));
+            Assert.Equal(36, homeTab.Bounds.Height, precision: 1);
+            Assert.Equal(36, documentTab.Bounds.Height, precision: 1);
+            Assert.Equal(new CornerRadius(10), homeTab.CornerRadius);
+            Assert.Equal(homeTab.CornerRadius, documentTab.CornerRadius);
+            Border documentTabSurface = documentTab.GetVisualChildren().OfType<Border>().Single();
+            Assert.Equal(
+                Color.Parse("#F0F2F8"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(documentTab.Background).Color);
+            Assert.Equal(
+                Color.Parse("#F0F2F8"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(documentTabSurface.Background).Color);
+            Point documentTabCenter = documentTab.TranslatePoint(
+                new Point(documentTab.Bounds.Width / 2, documentTab.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(documentTabCenter);
+            Assert.Equal(
+                Color.Parse("#E4E7F0"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(documentTab.Background).Color);
+            Assert.Equal(
+                Color.Parse("#E4E7F0"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(documentTabSurface.Background).Color);
+
+            Border[] pdfIcons = window.GetVisualDescendants().OfType<Border>()
+                .Where(border => border.Name is "SidebarAppIcon" or "DocumentTabIcon").ToArray();
+            Assert.Equal(3, pdfIcons.Length);
+            Assert.All(pdfIcons, icon =>
+            {
+                var gradient = Assert.IsType<LinearGradientBrush>(icon.Background);
+                Assert.Equal(new Point(0, 1), gradient.StartPoint.Point);
+                Assert.Equal(new Point(1, 0), gradient.EndPoint.Point);
+                Assert.Equal(
+                    new[] { Color.Parse("#835EF6"), Color.Parse("#566BF5") },
+                    gradient.GradientStops.Select(stop => stop.Color));
+            });
+
+            Border documentIcon = pdfIcons.Single(icon =>
+                icon.Name == "DocumentTabIcon" && ReferenceEquals(icon.DataContext, second));
+            Assert.Equal(22, documentIcon.Bounds.Width, precision: 1);
+            Assert.Equal(22, documentIcon.Bounds.Height, precision: 1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void WholeTabSelectsDocumentExceptForTheIndependentCloseButton()
     {
         using var viewModel = new MainViewModel();
@@ -69,7 +153,7 @@ public sealed class MainWindowTests
 
             window.MouseMove(hoverPoint);
             Assert.Equal(
-                Color.Parse("#F3F4F9"),
+                Color.Parse("#E4E7F0"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(tabButton.Background).Color);
 
             Point closeCenter = closeButton.TranslatePoint(
@@ -90,7 +174,7 @@ public sealed class MainWindowTests
 
             Assert.Same(second, viewModel.SelectedDocument);
             Assert.Equal(2, viewModel.OpenDocuments.Count);
-            Assert.Equal(40, tabButton.Bounds.Height, precision: 1);
+            Assert.Equal(36, tabButton.Bounds.Height, precision: 1);
             Assert.True(tabButton.Bounds.Height > closeButton.Bounds.Height);
             Assert.Equal(new CornerRadius(10), tabButton.CornerRadius);
             Border hoverSurface = tabButton.GetVisualDescendants().OfType<Border>().First();

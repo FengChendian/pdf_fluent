@@ -4,7 +4,7 @@
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="pdf_fluent.Views.HomeView"
              x:DataType="vm:MainViewModel"
-             Background="#FCFCFE">
+             Background="#F8FAFE">
     <UserControl.Resources>
         <DataTemplate x:Key="DocumentCardTemplate" DataType="vm:RecentDocumentViewModel">
             <Button Classes="recent-card" Width="196" x:CompileBindings="False"

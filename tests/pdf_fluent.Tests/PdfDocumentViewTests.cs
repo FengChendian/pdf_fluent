@@ -64,6 +64,10 @@ public sealed class PdfDocumentViewTests
             window.Show();
             window.UpdateLayout();
 
+            Grid documentSurface = Assert.IsType<Grid>(view.Content);
+            Assert.Equal(
+                Avalonia.Media.Color.Parse("#EEF1F8"),
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(documentSurface.Background).Color);
             Grid zoomControls = view.GetVisualDescendants()
                 .OfType<Grid>()
                 .Single(grid => grid.Name == "ZoomControls");
@@ -110,6 +114,43 @@ public sealed class PdfDocumentViewTests
             Assert.DoesNotContain("连续滚动", labels);
             Assert.DoesNotContain("按需渲染", labels);
             Assert.DoesNotContain("页面将在滚动时按需渲染", labels);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ReaderOverlaysHaveThinBordersAndFullyRoundedEnds()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+
+            Border[] overlays = view.GetVisualDescendants().OfType<Border>()
+                .Where(border => border.Name is "ReaderToolbar" or "PageNavigation" or "PageIndicatorOverlay")
+                .ToArray();
+            Assert.Equal(3, overlays.Length);
+            Assert.All(overlays, overlay =>
+            {
+                Assert.Equal(new Thickness(1), overlay.BorderThickness);
+                Assert.Equal(
+                    Avalonia.Media.Color.Parse("#DDE2EC"),
+                    Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(overlay.BorderBrush).Color);
+            });
+            Assert.All(overlays.Where(overlay => overlay.Name != "PageIndicatorOverlay"), overlay =>
+                Assert.True(overlay.CornerRadius.TopLeft >= overlay.Bounds.Height / 2));
+            Assert.Equal(
+                new CornerRadius(16),
+                overlays.Single(overlay => overlay.Name == "PageIndicatorOverlay").CornerRadius);
         }
         finally
         {

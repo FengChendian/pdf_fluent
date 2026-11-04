@@ -65,12 +65,14 @@
         </Style>
         <Style Selector="Border.reader-pill">
             <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="BorderBrush" Value="#DDE2EC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="24" />
             <Setter Property="BoxShadow" Value="0 4 18 0 #14000000" />
         </Style>
     </UserControl.Styles>
 
-    <Grid Background="#F1F3F8">
+    <Grid Background="#EEF1F8">
         <ScrollViewer x:Name="DocumentScroller"
                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="PageItems" ItemsSource="{Binding Pages}"
@@ -191,20 +193,20 @@
             </StackPanel>
         </Border>
 
-        <Border x:Name="PageIndicatorOverlay" Background="#F2FFFFFF" CornerRadius="12" Padding="16,8"
-                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20"
+        <Border x:Name="PageIndicatorOverlay" Background="#F2FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
+                CornerRadius="16" Padding="16,8" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20"
                 BoxShadow="0 3 14 0 #12000000" IsVisible="False" IsHitTestVisible="False">
             <TextBlock Text="{Binding FloatingPageIndicator}" FontSize="11" Foreground="#8A8F9E" />
         </Border>
 
-        <Border Background="#F1F3F8" IsVisible="{Binding IsLoading}">
+        <Border Background="#EEF1F8" IsVisible="{Binding IsLoading}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
                 <ProgressBar Width="180" Height="5" IsIndeterminate="True" Foreground="#6C5CE7" />
                 <TextBlock Text="正在读取页面信息…" FontSize="14" Foreground="#71778A" />
             </StackPanel>
         </Border>
 
-        <Border Background="#F1F3F8" Padding="30"
+        <Border Background="#EEF1F8" Padding="30"
                 IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="480">
                 <Border Width="58" Height="58" CornerRadius="18" Background="#FFECEF">
