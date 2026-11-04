@@ -174,6 +174,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         IsLoading = true;
         ErrorMessage = null;
         ClearPages();
+        ResetHighlights();
 
         try
         {
@@ -187,7 +188,6 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
                     new PdfPageViewModel(index, size.Width, size.Height, _zoom)));
             PageCount = sizes.Length;
             Pages = pages;
-            await LoadHighlightsAsync();
         }
         catch (Exception ex)
         {
@@ -206,6 +206,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         if (_disposed) return;
         _realizedPages.Add(page);
         if (isVisible) _ = ObserveTextLoadAsync(page);
+        if (isVisible) _ = ObserveHighlightLoadAsync(page);
         if (isVisible) _visiblePages.Add(page);
         else _visiblePages.Remove(page);
         page.SetZoom(_zoom, notify: true);
@@ -250,7 +251,11 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         foreach (PdfPageViewModel page in realizedPages) _realizedPages.Add(page);
         _visiblePages.Clear();
         foreach (PdfPageViewModel page in visiblePages ?? realizedPages) _visiblePages.Add(page);
-        foreach (PdfPageViewModel page in _visiblePages) _ = ObserveTextLoadAsync(page);
+        foreach (PdfPageViewModel page in _visiblePages)
+        {
+            _ = ObserveTextLoadAsync(page);
+            _ = ObserveHighlightLoadAsync(page);
+        }
         if (currentPageIndex is >= 0)
             CurrentPage = Math.Clamp(currentPageIndex.Value + 1, 1, PageCount);
         else

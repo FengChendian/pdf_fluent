@@ -49,6 +49,33 @@ public sealed class PdfHighlightEditingTests
     }
 
     [AvaloniaFact]
+    public async Task HighlightsLoadOnlyForVisiblePagesAndAreCached()
+    {
+        using var service = new FakePdfDocumentService(3);
+        service.InitialHighlights.Add(new PdfHighlight(
+            0, [new PdfRect(20, 750, 50, 738)], Avalonia.Media.Colors.Yellow));
+        service.InitialHighlights.Add(new PdfHighlight(
+            1, [new PdfRect(20, 750, 50, 738)], Avalonia.Media.Colors.Yellow));
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+
+        Assert.Empty(document.Highlights);
+        Assert.Empty(service.LoadedHighlightPages);
+
+        document.EnsurePageRendered(document.Pages[0]);
+        await PdfTestHelpers.WaitUntilAsync(() => document.Highlights.Count == 1);
+        Assert.Equal([0], service.LoadedHighlightPages);
+
+        document.EnsurePageRendered(document.Pages[0]);
+        Assert.Equal([0], service.LoadedHighlightPages);
+
+        document.SyncRealizedPages([document.Pages[1]], [document.Pages[1]]);
+        await PdfTestHelpers.WaitUntilAsync(() => document.Highlights.Count == 2);
+        Assert.Equal([0, 1], service.LoadedHighlightPages);
+        Assert.DoesNotContain(document.Highlights, highlight => highlight.PageIndex == 2);
+    }
+
+    [AvaloniaFact]
     public async Task NewAndExistingHighlightChangesDoNotWriteUntilSaved()
     {
         using var service = new FakePdfDocumentService(1);
@@ -59,6 +86,8 @@ public sealed class PdfHighlightEditingTests
         service.InitialHighlights.Add(existing);
         using var document = new DocumentTabViewModel("unused.pdf", service);
         await document.LoadAsync();
+        document.EnsurePageRendered(document.Pages[0]);
+        await PdfTestHelpers.WaitUntilAsync(() => document.Highlights.Count == 1);
         Assert.False(document.HasUnsavedHighlights);
         Assert.Single(document.Highlights);
 

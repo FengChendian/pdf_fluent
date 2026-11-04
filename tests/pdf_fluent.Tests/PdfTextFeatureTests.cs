@@ -88,7 +88,7 @@ public sealed class PdfTextFeatureTests
     }
 
     [AvaloniaFact]
-    public async Task HighlightPersistsAsStandardPdfAnnotation()
+    public async Task HighlightPersistsWithoutChangingHighlightsOnUnloadedPages()
     {
         string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent_tests");
         Directory.CreateDirectory(directory);
@@ -96,14 +96,19 @@ public sealed class PdfTextFeatureTests
         File.Copy(SamplePdfPath(), filePath);
         try
         {
-            int existingCount;
+            List<PdfHighlight> originalHighlights;
             int pageIndex;
             using (var service = new PDFiumService())
             {
+                originalHighlights = service.LoadHighlights(filePath);
                 using var document = new DocumentTabViewModel(filePath, service);
                 await document.LoadAsync();
-                existingCount = document.Highlights.Count;
-                (_, PdfTextPage text) = FirstVisibleTextPage(service, filePath);
+                Assert.Empty(document.Highlights);
+                HashSet<int> pagesWithOriginalHighlights = originalHighlights
+                    .Select(highlight => highlight.PageIndex)
+                    .ToHashSet();
+                (_, PdfTextPage text) = FirstVisibleTextPage(
+                    service, filePath, pagesWithOriginalHighlights);
                 pageIndex = text.PageIndex;
                 int characterIndex = text.Characters.First(character =>
                     character.HasGeometry && character.Bounds.Intersects(text.CropBox)).Index;
@@ -112,15 +117,21 @@ public sealed class PdfTextFeatureTests
                     new PdfTextPosition(pageIndex, characterIndex + 1)));
                 Assert.Null(document.HighlightErrorMessage);
                 Assert.True(document.HasUnsavedHighlights);
-                Assert.Equal(existingCount + 1, document.Highlights.Count);
+                Assert.Single(document.Highlights);
                 Assert.True(await document.SaveHighlightsAsync());
                 Assert.False(document.HasUnsavedHighlights);
             }
 
             using var reader = new PDFiumService();
             List<PdfHighlight> saved = reader.LoadHighlights(filePath);
-            Assert.Equal(existingCount + 1, saved.Count);
+            Assert.Equal(originalHighlights.Count + 1, saved.Count);
             Assert.Contains(saved, highlight => highlight.PageIndex == pageIndex && highlight.Rects.Count > 0);
+            foreach (PdfHighlight original in originalHighlights)
+            {
+                Assert.Contains(saved, highlight =>
+                    highlight.PageIndex == original.PageIndex &&
+                    highlight.Rects.SequenceEqual(original.Rects));
+            }
         }
         finally
         {
@@ -130,10 +141,12 @@ public sealed class PdfTextFeatureTests
 
     private static (int PageIndex, PdfTextPage Text) FirstVisibleTextPage(
         PDFiumService service,
-        string filePath)
+        string filePath,
+        IReadOnlySet<int>? excludedPages = null)
     {
         for (int pageIndex = 0; pageIndex < service.GetPageSizes(filePath).Length; pageIndex++)
         {
+            if (excludedPages?.Contains(pageIndex) == true) continue;
             PdfTextPage text = service.GetPageText(filePath, pageIndex);
             if (text.Characters.Any(character =>
                     character.HasGeometry && character.Bounds.Intersects(text.CropBox)))

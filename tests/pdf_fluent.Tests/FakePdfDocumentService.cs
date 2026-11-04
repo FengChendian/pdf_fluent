@@ -111,15 +111,23 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
 
     public List<PdfHighlight> InitialHighlights { get; } = [];
     public int SaveCallCount { get; private set; }
+    public List<int> LoadedHighlightPages { get; } = [];
+    public IReadOnlySet<int>? LastModifiedHighlightPages { get; private set; }
 
-    public List<PdfHighlight> LoadHighlights(string filePath) => InitialHighlights.ToList();
+    public List<PdfHighlight> LoadHighlights(string filePath, int pageNumber)
+    {
+        LoadedHighlightPages.Add(pageNumber);
+        return InitialHighlights.Where(highlight => highlight.PageIndex == pageNumber).ToList();
+    }
 
     public void SaveHighlightsToTemp(
         string filePath,
         IReadOnlyList<PdfHighlight> highlights,
-        string tempPath)
+        string tempPath,
+        IReadOnlySet<int> modifiedPages)
     {
         SaveCallCount++;
+        LastModifiedHighlightPages = modifiedPages;
         File.WriteAllBytes(tempPath, []);
     }
 

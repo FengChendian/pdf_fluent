@@ -758,75 +758,87 @@ namespace pdf_fluent.Services
             var document = LoadDocument(filePath);
             try
             {
-                int pageCount = fpdfview.FPDF_GetPageCount(document);
+                int pageCount;
+                lock (_pageLock) pageCount = fpdfview.FPDF_GetPageCount(document);
                 for (int p = 0; p < pageCount; p++)
+                    result.AddRange(LoadHighlightsFromPage(document, p));
+            }
+            finally
+            {
+                lock (_pageLock) fpdfview.FPDF_CloseDocument(document);
+            }
+            return result;
+        }
+
+        public List<PdfHighlight> LoadHighlights(string filePath, int pageNumber)
+        {
+            lock (_pageLock)
+                return LoadHighlightsFromPage(GetOrLoadDocument(filePath), pageNumber);
+        }
+
+        private static List<PdfHighlight> LoadHighlightsFromPage(FpdfDocumentT document, int pageIndex)
+        {
+            var result = new List<PdfHighlight>();
+            FpdfPageT page;
+            lock (_pageLock)
+            {
+                page = fpdfview.FPDF_LoadPage(document, pageIndex);
+            }
+            if (page == null) return result;
+            try
+            {
+                lock (_pageLock)
                 {
-                    FpdfPageT page;
-                    lock (_pageLock)
+                    int annotCount = fpdf_annot.FPDFPageGetAnnotCount(page);
+                    for (int i = 0; i < annotCount; i++)
                     {
-                        page = fpdfview.FPDF_LoadPage(document, p);
-                    }
-                    if (page == null) continue;
-                    try
-                    {
-                        lock (_pageLock)
+                        var annot = fpdf_annot.FPDFPageGetAnnot(page, i);
+                        if (annot == null) continue;
+                        try
                         {
-                            int annotCount = fpdf_annot.FPDFPageGetAnnotCount(page);
-                            for (int i = 0; i < annotCount; i++)
+                            if (fpdf_annot.FPDFAnnotGetSubtype(annot) != FPDF_ANNOT_HIGHLIGHT)
+                                continue;
+
+                            uint r = 0, g = 0, b = 0, a = 0;
+                            if (fpdf_annot.FPDFAnnotGetColor(annot,
+                                    FPDFANNOT_COLORTYPE.FPDFANNOT_COLORTYPE_Color,
+                                    ref r, ref g, ref b, ref a) == 0)
                             {
-                                var annot = fpdf_annot.FPDFPageGetAnnot(page, i);
-                                if (annot == null) continue;
-                                try
-                                {
-                                    if (fpdf_annot.FPDFAnnotGetSubtype(annot) != FPDF_ANNOT_HIGHLIGHT)
-                                        continue;
+                                // No /C entry — the producer baked the color into
+                                // the /AP appearance stream (or omitted it entirely).
+                                // Fall back to the de-facto standard highlighter
+                                // yellow instead of the (0,0,0) the call leaves behind.
+                                r = 255; g = 235; b = 59; a = 255;
+                            }
 
-                                    uint r = 0, g = 0, b = 0, a = 0;
-                                    if (fpdf_annot.FPDFAnnotGetColor(annot,
-                                            FPDFANNOT_COLORTYPE.FPDFANNOT_COLORTYPE_Color,
-                                            ref r, ref g, ref b, ref a) == 0)
-                                    {
-                                        // No /C entry — the producer baked the color into
-                                        // the /AP appearance stream (or omitted it entirely).
-                                        // Fall back to the de-facto standard highlighter
-                                        // yellow instead of the (0,0,0) the call leaves behind.
-                                        r = 255; g = 235; b = 59; a = 255;
-                                    }
+                            var rects = new List<PdfRect>();
+                            ulong quadCount = fpdf_annot.FPDFAnnotCountAttachmentPoints(annot);
+                            for (ulong q = 0; q < quadCount; q++)
+                            {
+                                using var quad = new FS_QUADPOINTSF();
+                                if (fpdf_annot.FPDFAnnotGetAttachmentPoints(annot, q, quad) != 0)
+                                    rects.Add(QuadToRect(quad));
+                            }
 
-                                    var rects = new List<PdfRect>();
-                                    ulong quadCount = fpdf_annot.FPDFAnnotCountAttachmentPoints(annot);
-                                    for (ulong q = 0; q < quadCount; q++)
-                                    {
-                                        using var quad = new FS_QUADPOINTSF();
-                                        if (fpdf_annot.FPDFAnnotGetAttachmentPoints(annot, q, quad) != 0)
-                                            rects.Add(QuadToRect(quad));
-                                    }
-
-                                    if (rects.Count > 0)
-                                    {
-                                        result.Add(new PdfHighlight(p, rects,
-                                            Color.FromArgb((byte)a, (byte)r, (byte)g, (byte)b)));
-                                    }
-                                }
-                                finally
-                                {
-                                    fpdf_annot.FPDFPageCloseAnnot(annot);
-                                }
+                            if (rects.Count > 0)
+                            {
+                                result.Add(new PdfHighlight(pageIndex, rects,
+                                    Color.FromArgb((byte)a, (byte)r, (byte)g, (byte)b)));
                             }
                         }
-                    }
-                    finally
-                    {
-                        lock (_pageLock)
+                        finally
                         {
-                            fpdfview.FPDF_ClosePage(page);
+                            fpdf_annot.FPDFPageCloseAnnot(annot);
                         }
                     }
                 }
             }
             finally
             {
-                fpdfview.FPDF_CloseDocument(document);
+                lock (_pageLock)
+                {
+                    fpdfview.FPDF_ClosePage(page);
+                }
             }
             return result;
         }
@@ -844,14 +856,17 @@ namespace pdf_fluent.Services
         // ── Highlight annotations: save ───────────────────────────────
 
         /// <summary>
-        /// Rewrites all highlight annotations in the document from
-        /// <paramref name="highlights"/> (non-highlight annotations are
-        /// preserved) and saves a full copy to <paramref name="tempPath"/>.
-        /// The caller is responsible for atomically replacing the original
-        /// file with the temp file.  Thread-safe (guarded by _pageLock).
+        /// Rewrites highlight annotations on <paramref name="modifiedPages"/> from
+        /// <paramref name="highlights"/>. Highlights on every other page and all
+        /// non-highlight annotations are preserved. Saves a full copy to
+        /// <paramref name="tempPath"/>. The caller is responsible for atomically
+        /// replacing the original file with the temp file. Thread-safe (guarded by _pageLock).
         /// </summary>
         public void SaveHighlightsToTemp(
-            string filePath, IReadOnlyList<PdfHighlight> highlights, string tempPath)
+            string filePath,
+            IReadOnlyList<PdfHighlight> highlights,
+            string tempPath,
+            IReadOnlySet<int> modifiedPages)
         {
             var document = LoadDocument(filePath);
             try
@@ -863,6 +878,7 @@ namespace pdf_fluent.Services
                 int pageCount = fpdfview.FPDF_GetPageCount(document);
                 for (int p = 0; p < pageCount; p++)
                 {
+                    if (!modifiedPages.Contains(p)) continue;
                     byPage.TryGetValue(p, out var pageHighlights);
 
                     FpdfPageT page;

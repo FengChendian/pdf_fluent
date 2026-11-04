@@ -9,6 +9,9 @@ namespace pdf_fluent.ViewModels;
 public sealed partial class DocumentTabViewModel
 {
     private readonly SemaphoreSlim _highlightSaveLock = new(1, 1);
+    private readonly Dictionary<int, Task> _highlightLoadTasks = new();
+    private readonly HashSet<int> _loadedHighlightPages = new();
+    private readonly HashSet<int> _modifiedHighlightPages = new();
 
     public ObservableCollection<PdfHighlight> Highlights { get; } = [];
 
@@ -35,6 +38,7 @@ public sealed partial class DocumentTabViewModel
         for (int pageIndex = range.Start.PageIndex; pageIndex <= range.End.PageIndex; pageIndex++)
         {
             if (pageIndex < 0 || pageIndex >= Pages.Count) continue;
+            await EnsurePageHighlightsAsync(pageIndex);
             PdfTextPage text = await GetTextPageAsync(pageIndex);
             if (text.GetPageSelection(range) is not { } pageRange) continue;
             IReadOnlyList<PdfRect> rects = text.GetMergedRects(pageRange.Start, pageRange.Count);
@@ -43,6 +47,7 @@ public sealed partial class DocumentTabViewModel
                 pageIndex,
                 rects,
                 Color.FromArgb(96, 255, 235, 59)));
+            _modifiedHighlightPages.Add(pageIndex);
             added = true;
         }
 
@@ -67,6 +72,7 @@ public sealed partial class DocumentTabViewModel
     {
         if (!Highlights.Remove(highlight)) return false;
         if (ReferenceEquals(SelectedHighlight, highlight)) SelectedHighlight = null;
+        _modifiedHighlightPages.Add(highlight.PageIndex);
         HasUnsavedHighlights = true;
         HighlightErrorMessage = null;
         NotifyTextOverlaysChanged();
@@ -89,16 +95,61 @@ public sealed partial class DocumentTabViewModel
 
     partial void OnSelectedHighlightChanged(PdfHighlight? value) => NotifyTextOverlaysChanged();
 
-    private async Task LoadHighlightsAsync()
+    private void ResetHighlights()
     {
         Highlights.Clear();
         SelectedHighlight = null;
         HasUnsavedHighlights = false;
         HighlightErrorMessage = null;
-        List<PdfHighlight> highlights = await Task.Run(() => _pdfService.LoadHighlights(FilePath));
-        foreach (PdfHighlight highlight in highlights) Highlights.Add(highlight);
-        NotifyTextOverlaysChanged();
+        _highlightLoadTasks.Clear();
+        _loadedHighlightPages.Clear();
+        _modifiedHighlightPages.Clear();
     }
+
+    private Task EnsurePageHighlightsAsync(int pageIndex)
+    {
+        if (_loadedHighlightPages.Contains(pageIndex)) return Task.CompletedTask;
+        if (_highlightLoadTasks.TryGetValue(pageIndex, out Task? pending)) return pending;
+
+        PdfPageViewModel page = Pages[pageIndex];
+        Task task = LoadAndPublishPageHighlightsAsync(page);
+        _highlightLoadTasks[pageIndex] = task;
+        return task;
+    }
+
+    private async Task LoadAndPublishPageHighlightsAsync(PdfPageViewModel page)
+    {
+        try
+        {
+            List<PdfHighlight> highlights = await Task.Run(() =>
+                _pdfService.LoadHighlights(FilePath, page.PageIndex));
+            if (!IsCurrentPage(page) || !_loadedHighlightPages.Add(page.PageIndex)) return;
+            foreach (PdfHighlight highlight in highlights) Highlights.Add(highlight);
+            NotifyTextOverlaysChanged();
+        }
+        finally
+        {
+            if (IsCurrentPage(page)) _highlightLoadTasks.Remove(page.PageIndex);
+        }
+    }
+
+    private async Task ObserveHighlightLoadAsync(PdfPageViewModel page)
+    {
+        try
+        {
+            await EnsurePageHighlightsAsync(page.PageIndex);
+        }
+        catch (Exception ex) when (!_disposed)
+        {
+            HighlightErrorMessage = ex.Message;
+        }
+    }
+
+    private bool IsCurrentPage(PdfPageViewModel page) =>
+        !_disposed &&
+        page.PageIndex >= 0 &&
+        page.PageIndex < Pages.Count &&
+        ReferenceEquals(Pages[page.PageIndex], page);
 
     public async Task<bool> SaveHighlightsAsync()
     {
@@ -113,11 +164,16 @@ public sealed partial class DocumentTabViewModel
         string tempPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            PdfHighlight[] snapshot = Highlights.ToArray();
-            await Task.Run(() => _pdfService.SaveHighlightsToTemp(FilePath, snapshot, tempPath));
+            HashSet<int> modifiedPages = _modifiedHighlightPages.ToHashSet();
+            PdfHighlight[] snapshot = Highlights
+                .Where(highlight => modifiedPages.Contains(highlight.PageIndex))
+                .ToArray();
+            await Task.Run(() =>
+                _pdfService.SaveHighlightsToTemp(FilePath, snapshot, tempPath, modifiedPages));
             _pdfService.ReleaseDocument(FilePath);
             File.Replace(tempPath, FilePath, null);
-            HasUnsavedHighlights = false;
+            _modifiedHighlightPages.ExceptWith(modifiedPages);
+            HasUnsavedHighlights = _modifiedHighlightPages.Count > 0;
             HighlightErrorMessage = null;
             return true;
         }

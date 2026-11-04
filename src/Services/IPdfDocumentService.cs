@@ -15,12 +15,13 @@ public interface IPdfDocumentService
         float scale = 1f,
         CancellationToken cancellationToken = default);
 
-    List<PdfHighlight> LoadHighlights(string filePath);
+    List<PdfHighlight> LoadHighlights(string filePath, int pageNumber);
 
     void SaveHighlightsToTemp(
         string filePath,
         IReadOnlyList<PdfHighlight> highlights,
-        string tempPath);
+        string tempPath,
+        IReadOnlySet<int> modifiedPages);
 
     void ReleaseDocument(string filePath);
 }
