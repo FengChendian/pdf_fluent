@@ -239,7 +239,8 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     public void SyncRealizedPages(
         IReadOnlyCollection<PdfPageViewModel> realizedPages,
         IReadOnlyCollection<PdfPageViewModel>? visiblePages = null,
-        int scrollDirection = 0)
+        int scrollDirection = 0,
+        int? currentPageIndex = null)
     {
         if (_disposed) return;
 
@@ -247,6 +248,10 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         foreach (PdfPageViewModel page in realizedPages) _realizedPages.Add(page);
         _visiblePages.Clear();
         foreach (PdfPageViewModel page in visiblePages ?? realizedPages) _visiblePages.Add(page);
+        if (currentPageIndex is >= 0)
+            CurrentPage = Math.Clamp(currentPageIndex.Value + 1, 1, PageCount);
+        else
+            UpdateCurrentPage(_visiblePages);
         if (scrollDirection != 0) _scrollDirection = Math.Sign(scrollDirection);
 
         foreach (RenderRequest request in _renderRequests.Values.ToArray())

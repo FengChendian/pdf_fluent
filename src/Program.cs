@@ -1,4 +1,6 @@
-﻿using Avalonia;
+using Avalonia;
+using Optris.Icons.Avalonia;
+using Optris.Icons.Avalonia.FontAwesome;
 using System;
 
 namespace pdf_fluent;
@@ -14,11 +16,15 @@ sealed class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    {
+        IconProvider.Current.Register<FontAwesomeIconProvider>();
+
+        return AppBuilder.Configure<App>()
             .UsePlatformDetect()
 #if DEBUG
             .WithDeveloperTools()
 #endif
             .WithInterFont()
             .LogToTrace();
+    }
 }

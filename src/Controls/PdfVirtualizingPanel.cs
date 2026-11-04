@@ -73,6 +73,24 @@ public sealed class PdfVirtualizingPanel : VirtualizingPanel
     internal int MeasurePassCount { get; private set; }
     internal int ScrollDirection { get; private set; } = 1;
 
+    internal int CurrentPageIndex
+    {
+        get
+        {
+            if (Items.Count == 0 || _viewport.Height <= 0) return -1;
+
+            double top = _viewport.Top - Padding.Top;
+            int index = FindPageIndexAt(top, Zoom);
+            if (index + 1 < Items.Count)
+            {
+                double nextPageTop = ItemTopAt(index + 1, Zoom);
+                if (top >= nextPageTop - PdfPageViewModel.FooterHeight / 2) index++;
+            }
+
+            return index;
+        }
+    }
+
     internal bool IsContainerVisible(Control container)
     {
         int index = IndexFromContainer(container);

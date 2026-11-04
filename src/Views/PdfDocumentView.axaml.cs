@@ -23,6 +23,9 @@ public partial class PdfDocumentView : UserControl
     private PdfZoomController? _zoomController;
     private TopLevel? _topLevel;
     private IDisposable? _renderScalingTimer;
+    private IDisposable? _pageIndicatorTimer;
+    private int _lastObservedPageNumber = 1;
+    private int? _pendingPageIndex;
 
     public PdfDocumentView()
     {
@@ -31,6 +34,8 @@ public partial class PdfDocumentView : UserControl
     }
 
     internal PdfZoomController? ZoomController => _zoomController;
+    internal TimeSpan PageIndicatorAutoHideDelay { get; set; } = TimeSpan.FromMilliseconds(800);
+    internal bool IsPageIndicatorVisible => PageIndicatorOverlay.IsVisible;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -40,6 +45,9 @@ public partial class PdfDocumentView : UserControl
 
     protected override void OnDataContextChanged(EventArgs e)
     {
+        HidePageIndicator();
+        _lastObservedPageNumber = (DataContext as DocumentTabViewModel)?.CurrentPage ?? 1;
+        _pendingPageIndex = null;
         ResetZoomController();
         base.OnDataContextChanged(e);
         ApplyRenderScaling();
@@ -48,6 +56,7 @@ public partial class PdfDocumentView : UserControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         DetachRenderScaling();
+        HidePageIndicator();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);
     }
@@ -122,6 +131,7 @@ public partial class PdfDocumentView : UserControl
 
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
+        if (e.Delta.Y != 0 && !e.KeyModifiers.HasFlag(KeyModifiers.Control)) _pendingPageIndex = null;
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Delta.Y == 0) return;
 
         EnsureZoomController();
@@ -157,6 +167,45 @@ public partial class PdfDocumentView : UserControl
         _zoomController?.ZoomBy(delta, anchorViewportPoint: null);
     }
 
+    private void OnPreviousPageClick(object? sender, RoutedEventArgs e) => ScrollToRelativePage(-1);
+
+    private void OnNextPageClick(object? sender, RoutedEventArgs e) => ScrollToRelativePage(1);
+
+    private void ScrollToRelativePage(int delta)
+    {
+        if (DataContext is not DocumentTabViewModel document || document.PageCount == 0) return;
+        int currentIndex = _pendingPageIndex ?? document.CurrentPage - 1;
+        int targetIndex = Math.Clamp(currentIndex + delta, 0, document.PageCount - 1);
+        _pendingPageIndex = targetIndex;
+        PageItems.ScrollIntoView(targetIndex);
+        document.CurrentPage = targetIndex + 1;
+    }
+
+    private void OnFavoriteClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is DocumentTabViewModel document &&
+            TopLevel.GetTopLevel(this)?.DataContext is MainViewModel mainViewModel)
+        {
+            mainViewModel.ToggleFavoriteCommand.Execute(document);
+        }
+    }
+
+    internal void ShowPageIndicator()
+    {
+        if (DataContext is not DocumentTabViewModel { PageCount: > 0 }) return;
+
+        _pageIndicatorTimer?.Dispose();
+        PageIndicatorOverlay.IsVisible = true;
+        _pageIndicatorTimer = DispatcherTimer.RunOnce(HidePageIndicator, PageIndicatorAutoHideDelay);
+    }
+
+    internal void HidePageIndicator()
+    {
+        _pageIndicatorTimer?.Dispose();
+        _pageIndicatorTimer = null;
+        PageIndicatorOverlay.IsVisible = false;
+    }
+
     private void OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
     {
         if (DataContext is DocumentTabViewModel document &&
@@ -188,6 +237,17 @@ public partial class PdfDocumentView : UserControl
             if (panel?.IsContainerVisible(container) ?? true) visiblePages.Add(page);
         }
 
-        document.SyncRealizedPages(realizedPages, visiblePages, panel?.ScrollDirection ?? 0);
+        document.SyncRealizedPages(
+            realizedPages, visiblePages, panel?.ScrollDirection ?? 0, panel?.CurrentPageIndex);
+        if (_pendingPageIndex is int pendingPageIndex &&
+            document.CurrentPage == pendingPageIndex + 1)
+        {
+            _pendingPageIndex = null;
+        }
+        if (_lastObservedPageNumber != document.CurrentPage)
+        {
+            _lastObservedPageNumber = document.CurrentPage;
+            ShowPageIndicator();
+        }
     }
 }

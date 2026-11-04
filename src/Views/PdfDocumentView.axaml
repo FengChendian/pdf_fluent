@@ -2,8 +2,36 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:pdf_fluent.ViewModels"
              xmlns:controls="using:pdf_fluent.Controls"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="pdf_fluent.Views.PdfDocumentView"
              x:DataType="vm:DocumentTabViewModel">
+    <UserControl.Resources>
+        <ControlTheme x:Key="MoreActionsMenuPresenterTheme" TargetType="MenuFlyoutPresenter"
+                      BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
+            <Setter Property="MinWidth" Value="172" />
+            <Setter Property="Padding" Value="0,4" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E4E7EF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+        </ControlTheme>
+        <ControlTheme x:Key="MoreActionsMenuItemTheme" TargetType="MenuItem"
+                      BasedOn="{StaticResource {x:Type MenuItem}}">
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#51596D" />
+            <Setter Property="FontSize" Value="12" />
+            <Style Selector="^:pointerover">
+                <Setter Property="Background" Value="#F0F3F9" />
+                <Setter Property="Foreground" Value="#424758" />
+            </Style>
+            <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+                <Setter Property="Background" Value="#F0F3F9" />
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Button.tool-button">
             <Setter Property="Width" Value="32" />
@@ -18,33 +46,86 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Button.tool-button:pointerover">
-            <Setter Property="Background" Value="#F0F3F9" />
+            <Setter Property="Background" Value="#F0F2F8" />
         </Style>
         <Style Selector="Button.tool-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#F0F3F9" />
+            <Setter Property="Background" Value="#F0F2F8" />
+        </Style>
+        <Style Selector="Button.tool-button:disabled">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#C4C8D2" />
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+        <Style Selector="Button.tool-button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.page-surface">
-            <Setter Property="BoxShadow" Value="0 3 18 0 #18000000" />
+            <Setter Property="BoxShadow" Value="0 4 22 0 #14000000" />
+        </Style>
+        <Style Selector="Border.reader-pill">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="BoxShadow" Value="0 4 18 0 #14000000" />
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="54,*" Background="#EEF0F3">
-        <Border Background="#FFFFFF" BorderBrush="#E6E8ED" BorderThickness="0,0,0,1" Padding="18,0">
-            <Grid ColumnDefinitions="*,Auto,*">
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border Background="#F0F1FF" CornerRadius="8" Padding="7,4">
-                        <TextBlock Text="PDF" FontSize="10" FontWeight="Bold" Foreground="#6D78D7" />
+    <Grid Background="#F1F3F8">
+        <ScrollViewer x:Name="DocumentScroller"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="PageItems" ItemsSource="{Binding Pages}"
+                          ContainerPrepared="OnContainerPrepared"
+                          LayoutUpdated="OnPagesLayoutUpdated">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <controls:PdfVirtualizingPanel BufferFactor="1"
+                                                       Padding="24,72,24,30"
+                                                       Zoom="{Binding Zoom}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:PdfPageViewModel">
+                        <Grid Width="{Binding ItemWidth}" Height="{Binding ItemHeight}"
+                              HorizontalAlignment="Center">
+                            <Border Width="{Binding PageWidth}" Height="{Binding PageHeight}"
+                                    Classes="page-surface" VerticalAlignment="Top"
+                                    Background="#FFFFFF" CornerRadius="2" ClipToBounds="True">
+                                <Grid>
+                                    <Image Source="{Binding Image}" Stretch="Uniform"
+                                           RenderOptions.BitmapInterpolationMode="LowQuality" />
+                                    <ProgressBar Width="120" Height="4" IsIndeterminate="True"
+                                                 Foreground="#6C5CE7" HorizontalAlignment="Center"
+                                                 VerticalAlignment="Center"
+                                                 IsVisible="{Binding IsPlaceholderVisible}" />
+                                    <TextBlock Text="此页渲染失败" FontSize="13" Foreground="#B45D68"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               IsVisible="{Binding HasError}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Border x:Name="ReaderToolbar" Classes="reader-pill" Padding="10,6"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0"
+                IsVisible="{Binding IsLoaded}">
+            <StackPanel Orientation="Horizontal" Spacing="5" Height="34">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="2,0,7,0">
+                    <Border Background="#F0EDFF" CornerRadius="7" Padding="7,4">
+                        <TextBlock Text="PDF" FontSize="10" FontWeight="Bold" Foreground="#6C5CE7" />
                     </Border>
                     <TextBlock Text="{Binding PageCount, StringFormat='{}{0} 页'}"
                                FontSize="12" Foreground="#858B9A" VerticalAlignment="Center" />
                 </StackPanel>
+                <Border Width="1" Height="20" Background="#ECECF2" VerticalAlignment="Center" Margin="3,0" />
 
-                <Grid x:Name="ZoomControls" Grid.Column="1" Width="132" Height="32"
-                      ColumnDefinitions="44,44,44" VerticalAlignment="Center">
+                <Grid x:Name="ZoomControls" Width="132" Height="32" ColumnDefinitions="44,44,44" VerticalAlignment="Center">
                     <Button x:Name="ZoomOutButton" Classes="tool-button"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Click="OnZoomOutClick" ToolTip.Tip="缩小">
-                        <Border Width="10" Height="1.6" Background="#666D80" CornerRadius="0.8" />
+                        <i:Icon Value="fa-solid fa-minus" FontSize="11" Foreground="#666D80" />
                     </Button>
                     <TextBlock Grid.Column="1" Text="{Binding ZoomPercent, StringFormat='{}{0}%'}"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -52,75 +133,90 @@
                     <Button x:Name="ZoomInButton" Grid.Column="2" Classes="tool-button"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Click="OnZoomInClick" ToolTip.Tip="放大">
-                        <Path Width="12" Height="12" Stretch="Uniform" Stroke="#666D80" StrokeThickness="1.6"
-                              Data="M1,6 L11,6 M6,1 L6,11" />
+                        <i:Icon Value="fa-solid fa-plus" FontSize="11" Foreground="#666D80" />
                     </Button>
                 </Grid>
-            </Grid>
+
+                <Border Width="1" Height="20" Background="#ECECF2" VerticalAlignment="Center" Margin="3,0" />
+                <Button x:Name="SearchButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="文档内搜索（即将推出）">
+                    <i:Icon Value="fa-solid fa-magnifying-glass" FontSize="14"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
+                <Button x:Name="AnnotationButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="画笔批注（即将推出）">
+                    <i:Icon Value="fa-solid fa-pen" FontSize="14"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
+                <Button x:Name="DownloadButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="下载（即将推出）">
+                    <i:Icon Value="fa-solid fa-download" FontSize="14"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
+                <Button x:Name="MoreToolsButton" Classes="tool-button" ToolTip.Tip="更多文档工具">
+                    <i:Icon Value="fa-solid fa-ellipsis" FontSize="15"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight"
+                                    FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
+                                    ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
+                            <MenuItem x:Name="FavoriteMenuItem" Click="OnFavoriteClick">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <i:Icon x:Name="FavoriteMenuIcon" Value="fa-regular fa-star" FontSize="14"
+                                                Foreground="#6C6483" />
+                                        <TextBlock Text="{Binding FavoriteToolTip}" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
         </Border>
 
-        <Grid Grid.Row="1">
-            <ScrollViewer x:Name="DocumentScroller"
-                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="PageItems" ItemsSource="{Binding Pages}"
-                              ContainerPrepared="OnContainerPrepared"
-                              LayoutUpdated="OnPagesLayoutUpdated">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <controls:PdfVirtualizingPanel BufferFactor="1"
-                                                           Padding="24,8,24,30"
-                                                           Zoom="{Binding Zoom}" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:PdfPageViewModel">
-                            <StackPanel Width="{Binding ItemWidth}" Height="{Binding ItemHeight}"
-                                        HorizontalAlignment="Center" Spacing="7">
-                                <Border Width="{Binding PageWidth}" Height="{Binding PageHeight}"
-                                        Classes="page-surface"
-                                        Background="#FFFFFF" CornerRadius="2" ClipToBounds="True">
-                                    <Grid>
-                                        <Image Source="{Binding Image}" Stretch="Uniform"
-                                               RenderOptions.BitmapInterpolationMode="LowQuality" />
-                                        <ProgressBar Width="120" Height="4" IsIndeterminate="True"
-                                                     Foreground="#7180E5" HorizontalAlignment="Center"
-                                                     VerticalAlignment="Center"
-                                                     IsVisible="{Binding IsPlaceholderVisible}" />
-                                        <TextBlock Text="此页渲染失败" FontSize="13" Foreground="#B45D68"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   IsVisible="{Binding HasError}" />
-                                    </Grid>
-                                </Border>
-                                <TextBlock Text="{Binding PageNumber}" Height="14" FontSize="11"
-                                           Foreground="#969BA7" HorizontalAlignment="Center"
-                                           Margin="0,0,0,12" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+        <Border x:Name="PageNavigation" Classes="reader-pill" Padding="5,3"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,20,0"
+                IsVisible="{Binding IsLoaded}">
+            <StackPanel Orientation="Horizontal" Spacing="3" Height="34">
+                <Button x:Name="PreviousPageButton" Classes="tool-button" Click="OnPreviousPageClick"
+                        IsEnabled="{Binding CanGoToPreviousPage}" ToolTip.Tip="上一页">
+                    <i:Icon Value="fa-solid fa-chevron-left" FontSize="11"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
+                <TextBlock Text="{Binding PageIndicator}" MinWidth="58" FontSize="12" Foreground="#656B7C"
+                           TextAlignment="Center" VerticalAlignment="Center" />
+                <Button x:Name="NextPageButton" Classes="tool-button" Click="OnNextPageClick"
+                        IsEnabled="{Binding CanGoToNextPage}" ToolTip.Tip="下一页">
+                    <i:Icon Value="fa-solid fa-chevron-right" FontSize="11"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
+            </StackPanel>
+        </Border>
 
-            <Border Background="#EEF0F3" IsVisible="{Binding IsLoading}">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
-                    <ProgressBar Width="180" Height="5" IsIndeterminate="True" Foreground="#7180E5" />
-                    <TextBlock Text="正在读取页面信息…" FontSize="14" Foreground="#71778A" />
-                </StackPanel>
-            </Border>
+        <Border x:Name="PageIndicatorOverlay" Background="#F2FFFFFF" CornerRadius="12" Padding="16,8"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20"
+                BoxShadow="0 3 14 0 #12000000" IsVisible="False" IsHitTestVisible="False">
+            <TextBlock Text="{Binding FloatingPageIndicator}" FontSize="11" Foreground="#8A8F9E" />
+        </Border>
 
-            <Border Background="#EEF0F3" Padding="30"
-                    IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="480">
-                    <Border Width="58" Height="58" CornerRadius="18" Background="#FFECEF">
-                        <TextBlock Text="!" FontSize="26" FontWeight="SemiBold" Foreground="#D86478"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock Text="文档未能打开" FontSize="18" FontWeight="SemiBold" Foreground="#424758" />
-                    <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" TextAlignment="Center"
-                               FontSize="12" Foreground="#858B9A" />
-                    <Button Content="重试" Command="{Binding RetryCommand}" Padding="22,9"
-                            CornerRadius="9" Background="#6878DF" Foreground="#FFFFFF" />
-                </StackPanel>
-            </Border>
-        </Grid>
+        <Border Background="#F1F3F8" IsVisible="{Binding IsLoading}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                <ProgressBar Width="180" Height="5" IsIndeterminate="True" Foreground="#6C5CE7" />
+                <TextBlock Text="正在读取页面信息…" FontSize="14" Foreground="#71778A" />
+            </StackPanel>
+        </Border>
+
+        <Border Background="#F1F3F8" Padding="30"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="480">
+                <Border Width="58" Height="58" CornerRadius="18" Background="#FFECEF">
+                    <TextBlock Text="!" FontSize="26" FontWeight="SemiBold" Foreground="#D86478"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="文档未能打开" FontSize="18" FontWeight="SemiBold" Foreground="#424758" />
+                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" TextAlignment="Center"
+                           FontSize="12" Foreground="#858B9A" />
+                <Button Content="重试" Command="{Binding RetryCommand}" Padding="22,9"
+                        CornerRadius="9" Background="#6C5CE7" Foreground="#FFFFFF" />
+            </StackPanel>
+        </Border>
     </Grid>
 </UserControl>

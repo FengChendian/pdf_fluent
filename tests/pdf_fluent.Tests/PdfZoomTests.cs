@@ -308,7 +308,7 @@ public sealed class PdfZoomTests
         harness.SetZoomImmediately(zoom);
         harness.UpdateLayout();
 
-        double offsetY = 8 + harness.Document.Pages.Take(pageIndex)
+        double offsetY = 72 + harness.Document.Pages.Take(pageIndex)
             .Sum(page => PdfPageViewModel.ItemHeightAt(page, zoom));
         harness.Scroller.Offset = new Vector(0, offsetY);
         harness.UpdateLayout();

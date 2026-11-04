@@ -5,10 +5,16 @@ namespace pdf_fluent.Services;
 
 public sealed class RecentDocumentsService
 {
-    private readonly string _storagePath = Path.Combine(
+    private readonly string _storagePath;
+
+    public RecentDocumentsService() : this(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "pdf_fluent",
-        "recent-documents.json");
+        "recent-documents.json"))
+    {
+    }
+
+    internal RecentDocumentsService(string storagePath) => _storagePath = storagePath;
 
     public IReadOnlyList<RecentDocument> Load()
     {

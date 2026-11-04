@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:pdf_fluent.ViewModels"
         xmlns:views="using:pdf_fluent.Views"
+        xmlns:i="https://github.com/projektanker/icons.avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
@@ -11,7 +12,8 @@
         Title="Fluent PDF"
         Width="1380" Height="860"
         MinWidth="1040" MinHeight="700"
-        Background="#E9EEF5"
+        Background="#FFFFFF"
+        WindowDecorations="Full"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <ControlTheme x:Key="MoreActionsMenuPresenterTheme" TargetType="MenuFlyoutPresenter"
@@ -43,36 +45,59 @@
     <Window.Styles>
         <Style Selector="Button.plain-button">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
         <Style Selector="Button.plain-button:pointerover">
             <Setter Property="Background" Value="#F0F3F9" />
         </Style>
-        <Style Selector="Button.nav-button">
+        <Style Selector="Button.nav-button, ToggleButton.nav-button">
             <Setter Property="Width" Value="40" />
             <Setter Property="Height" Value="40" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="#858CA0" />
+            <Setter Property="Foreground" Value="#7D8499" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
-        <Style Selector="Button.nav-home">
-            <Setter Property="Background" Value="#ECEFFC" />
-            <Setter Property="Foreground" Value="#6171D8" />
+        <Style Selector="Button.nav-button:pointerover, ToggleButton.nav-button:pointerover">
+            <Setter Property="Background" Value="#F0F2F8" />
+            <Setter Property="Foreground" Value="#625BE7" />
         </Style>
-        <Style Selector="Button.nav-button:pointerover">
-            <Setter Property="Background" Value="#F0F3F9" />
-            <Setter Property="Foreground" Value="#5F6FD6" />
+        <Style Selector="Button.nav-button:disabled">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#C4C8D2" />
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+        <Style Selector="ToggleButton.nav-button.selected, ToggleButton.nav-button.selected:pointerover">
+            <Setter Property="Background" Value="#ECEEFF" />
+            <Setter Property="Foreground" Value="#625BE7" />
         </Style>
         <Style Selector="Button.more-actions-button">
-            <Setter Property="Background" Value="#F8F9FB" />
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Button.more-actions-button:pointerover">
             <Setter Property="Background" Value="#F0F3F9" />
         </Style>
-        <Style Selector="Button.tab-select">
+        <Style Selector="ToggleButton.top-tab">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Foreground" Value="#777E91" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="ToggleButton.top-tab:pointerover">
+            <Setter Property="Background" Value="#F5F6FA" />
+        </Style>
+        <Style Selector="ToggleButton.top-tab.selected">
+            <Setter Property="Background" Value="#F0F1FF" />
+            <Setter Property="Foreground" Value="#625BE7" />
+        </Style>
+        <Style Selector="ToggleButton.tab-select">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Template">
@@ -88,8 +113,11 @@
                 </ControlTemplate>
             </Setter>
         </Style>
-        <Style Selector="Button.tab-select:pointerover">
-            <Setter Property="Background" Value="#F0F3F9" />
+        <Style Selector="ToggleButton.tab-select:checked">
+            <Setter Property="Background" Value="#F0F1FF" />
+        </Style>
+        <Style Selector="ToggleButton.tab-select:pointerover">
+            <Setter Property="Background" Value="#F3F4F9" />
         </Style>
         <Style Selector="Button.tab-close">
             <Setter Property="Width" Value="26" />
@@ -103,149 +131,188 @@
             <Setter Property="Foreground" Value="#9CA1B0" />
         </Style>
         <Style Selector="Button.tab-close:pointerover">
-            <Setter Property="Background" Value="#F0F3F9" />
+            <Setter Property="Background" Value="#E9EBF2" />
             <Setter Property="Foreground" Value="#555D73" />
         </Style>
-        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+        <Style Selector="Button.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F2F8" />
+        </Style>
+        <Style Selector="Button.nav-button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.tab-close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E9EBF2" />
+        </Style>
+        <Style Selector="ToggleButton.nav-button.selected /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.nav-button.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#ECEEFF" />
+            <Setter Property="Foreground" Value="#625BE7" />
+        </Style>
+        <Style Selector="ToggleButton.top-tab.selected /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.top-tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F1FF" />
+            <Setter Property="Foreground" Value="#625BE7" />
         </Style>
     </Window.Styles>
 
-    <Border Margin="0" CornerRadius="0" Background="#FFFFFF"
-            BorderThickness="0">
-        <Grid ColumnDefinitions="64,*" RowDefinitions="60,*">
-            <Border Grid.RowSpan="2" Background="#F8F9FC" BorderBrush="#E8EBF2" BorderThickness="0,0,1,0">
-                <Grid RowDefinitions="Auto,*" Margin="0,12">
-                    <Border Width="36" Height="36" CornerRadius="12" Margin="0,2,0,0"
-                            HorizontalAlignment="Center">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                <GradientStop Color="#7586ED" Offset="0" />
-                                <GradientStop Color="#5364CE" Offset="1" />
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <TextBlock Text="P" FontSize="19" FontWeight="Bold" Foreground="#FFFFFF"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+    <Grid ColumnDefinitions="72,*" RowDefinitions="56,*">
+        <Border Grid.Row="0" Grid.RowSpan="2" Background="#FAFAFC" BorderBrush="#F0F1F5" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,*,Auto" Margin="0,12,0,18">
+                <Border Width="40" Height="40" CornerRadius="13" HorizontalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                            <GradientStop Color="#8172F2" Offset="0" />
+                            <GradientStop Color="#5B50D8" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="P" FontSize="21" FontWeight="Bold" Foreground="#FFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
 
-                    <StackPanel Grid.Row="1" Spacing="10" Margin="0,28,0,0"
-                                HorizontalAlignment="Center" VerticalAlignment="Top">
-                        <Button Classes="nav-button nav-home" Command="{Binding ShowHomeCommand}"
-                                ToolTip.Tip="主页">
-                            <PathIcon Width="18" Height="18"
-                                      Data="M3,11 L12,3 L21,11 L19,11 L19,21 L14,21 L14,15 L10,15 L10,21 L5,21 L5,11 Z" />
-                        </Button>
-                        <Button Classes="nav-button" Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
-                            <PathIcon Width="18" Height="18"
-                                      Data="M11,4 L13,4 L13,11 L20,11 L20,13 L13,13 L13,20 L11,20 L11,13 L4,13 L4,11 L11,11 Z" />
-                        </Button>
-                        <Button Classes="nav-button" IsEnabled="False" Opacity="0.48" ToolTip.Tip="星标（即将推出）">
-                            <PathIcon Width="19" Height="19"
-                                      Data="M12,2 L15,9 L22,9 L16.5,13.5 L18.5,21 L12,16.5 L5.5,21 L7.5,13.5 L2,9 L9,9 Z" />
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Border Grid.Column="1" Background="#FFFFFF" BorderBrush="#ECEEF3" BorderThickness="0,0,0,1">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Button Classes="plain-button" Command="{Binding ShowHomeCommand}" BorderThickness="0"
-                            Padding="18,0" Cursor="Hand">
-                        <StackPanel Spacing="0" Height="60">
-                            <StackPanel Orientation="Horizontal" Spacing="8" Height="57" VerticalAlignment="Center">
-                                <PathIcon Width="16" Height="16" Foreground="#6675D7"
-                                          Data="M3,11 L12,3 L21,11 L19,11 L19,21 L14,21 L14,15 L10,15 L10,21 L5,21 L5,11 Z" />
-                                <TextBlock Text="主页" FontSize="13" FontWeight="Medium" Foreground="#51596D"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                            <Border Height="3" Width="34" CornerRadius="2" Background="#6879DF"
-                                    HorizontalAlignment="Center" IsVisible="{Binding IsHomeSelected}" />
-                        </StackPanel>
+                <StackPanel Grid.Row="1" Spacing="12" Margin="0,30,0,0" HorizontalAlignment="Stretch">
+                    <Grid Height="44">
+                        <Border x:Name="HomeSelectionIndicator" Width="3" Height="22" CornerRadius="1.5"
+                                Background="#6C5CE7" HorizontalAlignment="Left" Margin="6.5,0,6.5,0"
+                                VerticalAlignment="Center" IsVisible="{Binding IsHomeSelected}" />
+                        <ToggleButton x:Name="HomeNavButton" Classes="nav-button" Classes.selected="{Binding IsHomeSelected}"
+                                      Command="{Binding ShowHomeCommand}"
+                                      IsChecked="{Binding IsHomeSelected, Mode=OneWay}" ToolTip.Tip="主页">
+                            <i:Icon Value="fa-solid fa-house" FontSize="16"
+                                    Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                        </ToggleButton>
+                    </Grid>
+                    <Button Classes="nav-button" Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
+                        <i:Icon Value="fa-solid fa-plus" FontSize="16" />
                     </Button>
+                    <Grid Height="44">
+                        <Border Width="3" Height="22" CornerRadius="1.5" Background="#6C5CE7"
+                                HorizontalAlignment="Left" Margin="6.5,0,6.5,0" VerticalAlignment="Center"
+                                IsVisible="{Binding IsFavoritesSelected}" />
+                        <ToggleButton x:Name="FavoritesNavButton" Classes="nav-button" Classes.selected="{Binding IsFavoritesSelected}"
+                                      Command="{Binding ShowFavoritesCommand}"
+                                      IsChecked="{Binding IsFavoritesSelected, Mode=OneWay}" ToolTip.Tip="收藏">
+                            <Grid>
+                                <i:Icon x:Name="FavoriteNavIcon" Value="fa-regular fa-star" FontSize="16"
+                                        Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                                <Border x:Name="FavoriteNotificationDot" Width="7" Height="7" CornerRadius="3.5"
+                                        Background="#7665E8" BorderBrush="#FAFAFC" BorderThickness="1.5"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,2,0"
+                                        IsVisible="{Binding HasFavoriteNotification}" />
+                            </Grid>
+                        </ToggleButton>
+                    </Grid>
+                    <Border Width="24" Height="1" Background="#ECEEF3" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                </StackPanel>
 
-                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Center">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:DocumentTabViewModel">
-                                    <Border Width="220" Height="44" Margin="5,8,0,8" Padding="0"
-                                            Background="#F7F8FB" CornerRadius="10" ClipToBounds="True" x:CompileBindings="False">
-                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,3">
-                                            <Button x:Name="TabSelectButton" Classes="tab-select" Grid.RowSpan="2" Grid.ColumnSpan="2"
-                                                    Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    BorderThickness="0" Padding="12,0,40,0" Cursor="Hand"
-                                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                                    HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
-                                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                                    <Border Background="#E9ECFC" CornerRadius="5" Padding="4,2">
-                                                        <TextBlock Text="P" FontSize="9" FontWeight="Bold" Foreground="#6C79D2" />
-                                                    </Border>
-                                                    <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#51586B"
-                                                               TextTrimming="CharacterEllipsis" MaxWidth="142"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Grid.Column="1" Grid.RowSpan="2" Classes="tab-close"
-                                                    Margin="0,0,7,0" VerticalAlignment="Center"
-                                                    Command="{Binding $parent[Window].DataContext.CloseDocumentCommand}"
-                                                    CommandParameter="{Binding}" ToolTip.Tip="关闭">
-                                                <Path Width="10" Height="10" Stretch="Uniform"
-                                                      Stroke="#8B92A3" StrokeThickness="1.5"
-                                                      Data="M1,1 L9,9 M9,1 L1,9" />
-                                            </Button>
-                                            <Border Grid.Row="1" Grid.ColumnSpan="2" Height="3" Width="46"
-                                                    CornerRadius="2" Background="#6879DF" HorizontalAlignment="Center"
-                                                    IsVisible="{Binding IsSelected}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="12,0,18,0" Spacing="8">
-                        <ProgressBar Width="64" Height="4" IsIndeterminate="True"
-                                     IsVisible="{Binding IsOpening}" Foreground="#6C7BDD" />
-                        <Button x:Name="MoreActionsButton" Classes="more-actions-button" Width="32" Height="32" Padding="0"
-                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                CornerRadius="10" BorderThickness="0"
-                                Cursor="Hand" ToolTip.Tip="更多操作">
-                            <PathIcon Width="16" Height="16" Foreground="#9298A8"
-                                      Data="M4,10 A2,2 0 1,0 4,14 A2,2 0 1,0 4,10 M10,10 A2,2 0 1,0 10,14 A2,2 0 1,0 10,10 M16,10 A2,2 0 1,0 16,14 A2,2 0 1,0 16,10" />
-                            <Button.Flyout>
-                                <MenuFlyout Placement="BottomEdgeAlignedRight"
-                                            FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
-                                            ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
-                                    <MenuItem Header="打开新文件" Command="{Binding OpenPdfCommand}" />
-                                    <MenuItem Header="关闭所有标签页" Command="{Binding CloseAllDocumentsCommand}" />
-                                </MenuFlyout>
-                            </Button.Flyout>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Grid Grid.Row="1" Grid.Column="1">
-                <views:HomeView IsVisible="{Binding IsHomeSelected}" />
-                <ContentControl Content="{Binding SelectedDocument}" IsVisible="{Binding IsDocumentOpen}">
-                    <ContentControl.DataTemplates>
-                        <DataTemplate DataType="vm:DocumentTabViewModel">
-                            <views:PdfDocumentView />
-                        </DataTemplate>
-                    </ContentControl.DataTemplates>
-                </ContentControl>
+                <Button Grid.Row="2" Classes="nav-button" IsEnabled="False" ToolTip.Tip="设置（即将推出）">
+                    <i:Icon Value="fa-solid fa-gear" FontSize="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+                </Button>
             </Grid>
+        </Border>
 
-            <Border Grid.Row="1" Grid.Column="1" Background="#CCFFFFFF" CornerRadius="12"
-                    Padding="14,9" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,18"
-                    IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#666E82" />
-            </Border>
+        <Border Grid.Row="0" Grid.Column="1" Background="#FFFFFF" BorderBrush="#F0F1F5" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="14,0,16,0">
+                <ToggleButton Classes="top-tab" Classes.selected="{Binding IsHomeSelected}"
+                              Command="{Binding ShowHomeCommand}"
+                              IsChecked="{Binding IsHomeSelected, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <i:Icon Value="fa-solid fa-house" FontSize="13"
+                                Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                        <TextBlock Text="主页" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
+                <Button Grid.Column="1" Classes="plain-button" Width="34" Height="34" Margin="4,0,4,0"
+                        Padding="0" CornerRadius="10" Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
+                    <i:Icon Value="fa-solid fa-plus" FontSize="13" Foreground="#9197A8" />
+                </Button>
+
+                <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:DocumentTabViewModel">
+                                <Border Width="200" Height="40" Margin="4,4,0,4" Background="Transparent"
+                                        CornerRadius="10" ClipToBounds="True" x:CompileBindings="False">
+                                    <Grid>
+                                        <ToggleButton x:Name="TabSelectButton" Classes="tab-select"
+                                                      Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
+                                                      CommandParameter="{Binding}"
+                                                      IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                      BorderThickness="0" Padding="12,0,38,0" Cursor="Hand"
+                                                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                      HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Background="#E7E5FF" CornerRadius="5" Padding="5,3">
+                                                    <TextBlock Text="P" FontSize="9" FontWeight="Bold" Foreground="#6C5CE7" />
+                                                </Border>
+                                                <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#51586B"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="128"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                        <Button Classes="tab-close" Margin="0,0,7,0" HorizontalAlignment="Right"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding $parent[Window].DataContext.CloseDocumentCommand}"
+                                                CommandParameter="{Binding}" ToolTip.Tip="关闭">
+                                            <i:Icon Value="fa-solid fa-xmark" FontSize="11" Foreground="#8B92A3" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <Grid Grid.Column="3" Width="340" Margin="14,0,10,0" VerticalAlignment="Center"
+                      IsVisible="{Binding IsHomeSelected}">
+                    <TextBox x:Name="DocumentSearchBox" Text="{Binding SearchText}" PlaceholderText="搜索文档…"
+                             Height="34" Padding="34,0,12,0" FontSize="12" CornerRadius="10"
+                             Background="#F5F6FA" BorderThickness="0" VerticalContentAlignment="Center" />
+                    <i:Icon Value="fa-solid fa-magnifying-glass" FontSize="13" Foreground="#8E94A7"
+                            Margin="12,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False" />
+                </Grid>
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8">
+                    <ProgressBar Width="56" Height="4" IsIndeterminate="True"
+                                 IsVisible="{Binding IsOpening}" Foreground="#6C5CE7" />
+                    <Button x:Name="MoreActionsButton" Classes="more-actions-button" Width="34" Height="34" Padding="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            CornerRadius="10" BorderThickness="0" Cursor="Hand" ToolTip.Tip="更多操作">
+                        <i:Icon Value="fa-solid fa-ellipsis" FontSize="15" Foreground="#7D8496" />
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight"
+                                        FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
+                                        ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
+                                <MenuItem Header="打开新文件" Command="{Binding OpenPdfCommand}" />
+                                <MenuItem Header="关闭所有标签页" Command="{Binding CloseAllDocumentsCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Grid.Column="1">
+            <views:HomeView IsVisible="{Binding IsLibraryOpen}" />
+            <ContentControl Content="{Binding SelectedDocument}" IsVisible="{Binding IsDocumentOpen}">
+                <ContentControl.DataTemplates>
+                    <DataTemplate DataType="vm:DocumentTabViewModel">
+                        <views:PdfDocumentView />
+                    </DataTemplate>
+                </ContentControl.DataTemplates>
+            </ContentControl>
         </Grid>
-    </Border>
+
+        <Border Grid.Row="1" Grid.Column="1" Background="#F0FFFFFF" CornerRadius="12"
+                Padding="14,9" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,18"
+                IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#666E82" />
+        </Border>
+    </Grid>
 </Window>
