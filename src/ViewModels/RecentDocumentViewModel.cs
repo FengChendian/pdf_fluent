@@ -4,12 +4,16 @@ using pdf_fluent.Models;
 
 namespace pdf_fluent.ViewModels;
 
-public sealed class RecentDocumentViewModel(RecentDocument document, ICommand? removeCommand = null) : ViewModelBase, IDisposable
+public sealed class RecentDocumentViewModel(
+    RecentDocument document,
+    ICommand? removeCommand = null,
+    string removeActionText = "删除最近记录") : ViewModelBase, IDisposable
 {
-    private readonly byte[]? _thumbnailData = document.Thumbnail;
+    private byte[]? _thumbnailData = document.Thumbnail;
     private Bitmap? _thumbnail = DecodeThumbnail(document.Thumbnail);
 
     public ICommand? RemoveCommand { get; } = removeCommand;
+    public string RemoveActionText { get; } = removeActionText;
 
     public string FilePath { get; } = document.FilePath;
     public string FileName => Path.GetFileNameWithoutExtension(FilePath);
@@ -29,6 +33,13 @@ public sealed class RecentDocumentViewModel(RecentDocument document, ICommand? r
     public void MarkAsRead() => IsUnread = false;
 
     public void UpdateScrollOffset(Avalonia.Vector offset) => ScrollOffset = offset;
+
+    public void UpdateThumbnail(byte[]? data)
+    {
+        _thumbnail?.Dispose();
+        _thumbnailData = data;
+        Thumbnail = DecodeThumbnail(data);
+    }
 
     public RecentDocument ToModel() => new()
     {

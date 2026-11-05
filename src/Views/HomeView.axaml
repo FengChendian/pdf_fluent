@@ -13,7 +13,7 @@
                 <Button.ContextMenu>
                     <ContextMenu Classes="recent-context-menu" Opened="OnRecentContextMenuOpened"
                                  GotFocus="OnRecentContextMenuGotFocus">
-                        <MenuItem Classes="danger-menu-item" Header="删除最近记录"
+                        <MenuItem Classes="danger-menu-item" Header="{Binding RemoveActionText}"
                                   Command="{Binding RemoveCommand}" CommandParameter="{Binding}" />
                     </ContextMenu>
                 </Button.ContextMenu>

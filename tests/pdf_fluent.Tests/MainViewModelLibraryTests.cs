@@ -131,6 +131,100 @@ public sealed class MainViewModelLibraryTests
     }
 
     [AvaloniaFact]
+    public void FavoriteDocumentsReuseRecentThumbnailsAndRemoveOnlyTheFavorite()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        string recentPath = Path.Combine(directory, "recent.json");
+        string favoritesPath = Path.Combine(directory, "favorites.json");
+        byte[] thumbnail = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        try
+        {
+            new RecentDocumentsService(recentPath).Save([
+                new RecentDocument
+                {
+                    FilePath = "document.pdf",
+                    PageCount = 8,
+                    LastOpened = DateTimeOffset.Now,
+                    Thumbnail = thumbnail,
+                },
+            ]);
+            new FavoriteDocumentsService(favoritesPath).Save([
+                new RecentDocument
+                {
+                    FilePath = "document.pdf",
+                    PageCount = 8,
+                    LastOpened = DateTimeOffset.Now,
+                },
+            ]);
+            using var viewModel = new MainViewModel(
+                new PDFiumService(),
+                new RecentDocumentsService(recentPath),
+                new FavoriteDocumentsService(favoritesPath));
+            using var service = new FakePdfDocumentService(8);
+            using var document = new DocumentTabViewModel("document.pdf", service) { IsFavorite = true };
+            viewModel.OpenDocuments.Add(document);
+
+            var favorite = Assert.Single(viewModel.FavoriteDocuments);
+            Assert.NotNull(favorite.Thumbnail);
+            Assert.Equal(thumbnail, favorite.ToModel().Thumbnail);
+            Assert.Equal("从收藏夹移除", favorite.RemoveActionText);
+
+            favorite.RemoveCommand!.Execute(favorite);
+
+            Assert.Empty(viewModel.FavoriteDocuments);
+            Assert.Single(viewModel.RecentDocuments);
+            Assert.False(document.IsFavorite);
+            Assert.Empty(new FavoriteDocumentsService(favoritesPath).Load());
+            Assert.Single(new RecentDocumentsService(recentPath).Load());
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public void AddingAFavoriteCopiesTheCachedRecentThumbnail()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        string recentPath = Path.Combine(directory, "recent.json");
+        string favoritesPath = Path.Combine(directory, "favorites.json");
+        byte[] thumbnail = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        try
+        {
+            new RecentDocumentsService(recentPath).Save([
+                new RecentDocument
+                {
+                    FilePath = "document.pdf",
+                    PageCount = 8,
+                    LastOpened = DateTimeOffset.Now,
+                    Thumbnail = thumbnail,
+                },
+            ]);
+            using var viewModel = new MainViewModel(
+                new PDFiumService(),
+                new RecentDocumentsService(recentPath),
+                new FavoriteDocumentsService(favoritesPath));
+            using var service = new FakePdfDocumentService(8);
+            using var document = new DocumentTabViewModel("document.pdf", service);
+            viewModel.OpenDocuments.Add(document);
+
+            viewModel.ToggleFavoriteCommand.Execute(document);
+
+            var favorite = Assert.Single(viewModel.FavoriteDocuments);
+            Assert.NotNull(favorite.Thumbnail);
+            Assert.Equal(thumbnail, favorite.ToModel().Thumbnail);
+            Assert.Equal(thumbnail, new FavoriteDocumentsService(favoritesPath).Load().Single().Thumbnail);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void RecentDocumentThumbnailsSurviveSavingAndReloading()
     {
         string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));

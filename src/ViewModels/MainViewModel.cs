@@ -36,7 +36,13 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             RecentDocuments.Add(new RecentDocumentViewModel(document, RemoveRecentDocumentCommand));
 
         foreach (var document in _favoriteService.Load().OrderByDescending(d => d.LastOpened))
-            FavoriteDocuments.Add(new RecentDocumentViewModel(document));
+        {
+            var recent = RecentDocuments.FirstOrDefault(d =>
+                string.Equals(d.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase));
+            document.Thumbnail ??= recent?.ToModel().Thumbnail;
+            FavoriteDocuments.Add(new RecentDocumentViewModel(
+                document, RemoveFavoriteDocumentCommand, "从收藏夹移除"));
+        }
 
         RefreshVisibleRecentDocuments();
     }
@@ -189,19 +195,38 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
+            var recent = RecentDocuments.FirstOrDefault(d =>
+                string.Equals(d.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase));
             FavoriteDocuments.Insert(0, new RecentDocumentViewModel(new RecentDocument
             {
                 FilePath = document.FilePath,
                 PageCount = document.PageCount,
                 LastOpened = DateTimeOffset.Now,
                 IsUnread = true,
-            }));
+                Thumbnail = recent?.ToModel().Thumbnail,
+            }, RemoveFavoriteDocumentCommand, "从收藏夹移除"));
             document.IsFavorite = true;
         }
 
         _favoriteService.Save(FavoriteDocuments.Select(d => d.ToModel()));
         OnPropertyChanged(nameof(HasFavoriteNotification));
         OnPropertyChanged(nameof(HasNoFavoriteDocuments));
+    }
+
+    [RelayCommand]
+    private void RemoveFavoriteDocument(RecentDocumentViewModel? document)
+    {
+        if (document is null || !FavoriteDocuments.Remove(document)) return;
+
+        string fileName = document.FileName;
+        foreach (var openDocument in OpenDocuments.Where(d =>
+                     string.Equals(d.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase)))
+            openDocument.IsFavorite = false;
+        document.Dispose();
+        _favoriteService.Save(FavoriteDocuments.Select(d => d.ToModel()));
+        OnPropertyChanged(nameof(HasFavoriteNotification));
+        OnPropertyChanged(nameof(HasNoFavoriteDocuments));
+        StatusMessage = $"已从收藏夹移除：{fileName}";
     }
 
     [RelayCommand]
@@ -334,6 +359,13 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         _recentService.Save(RecentDocuments.Select(d => d.ToModel()));
+        var favorite = FavoriteDocuments.FirstOrDefault(d =>
+            string.Equals(d.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase));
+        if (favorite is not null && thumbnail is not null)
+        {
+            favorite.UpdateThumbnail(thumbnail);
+            _favoriteService.Save(FavoriteDocuments.Select(d => d.ToModel()));
+        }
         RefreshVisibleRecentDocuments();
         OnPropertyChanged(nameof(HasRecentDocuments));
         OnPropertyChanged(nameof(HasNoRecentDocuments));

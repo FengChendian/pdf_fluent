@@ -48,6 +48,63 @@ public sealed class HomeViewTests
     }
 
     [AvaloniaFact]
+    public void FavoriteDocumentContextMenuRemovesOnlyTheFavorite()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        using var viewModel = new MainViewModel(
+            new Services.PDFiumService(),
+            new Services.RecentDocumentsService(Path.Combine(directory, "recent.json")),
+            new Services.FavoriteDocumentsService(Path.Combine(directory, "favorites.json")));
+        var favorite = new RecentDocumentViewModel(new RecentDocument
+        {
+            FilePath = "document.pdf",
+            PageCount = 1,
+            LastOpened = DateTimeOffset.Now,
+        }, viewModel.RemoveFavoriteDocumentCommand, "从收藏夹移除");
+        viewModel.FavoriteDocuments.Add(favorite);
+        viewModel.ShowFavoritesCommand.Execute(null);
+        var window = new MainWindow
+        {
+            Width = 1040,
+            Height = 700,
+            DataContext = viewModel,
+        };
+        ContextMenu? menu = null;
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            Button card = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("recent-card") &&
+                                  ReferenceEquals(button.DataContext, favorite));
+            menu = card.ContextMenu;
+            Assert.NotNull(menu);
+            Point center = card.TranslatePoint(
+                new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), window)!.Value;
+
+            window.MouseDown(center, MouseButton.Right);
+            window.MouseUp(center, MouseButton.Right);
+            window.UpdateLayout();
+
+            Assert.True(menu.IsOpen);
+            var item = Assert.IsType<MenuItem>(menu.Items.Single());
+            Assert.Equal("从收藏夹移除", item.Header);
+            Assert.Same(viewModel.RemoveFavoriteDocumentCommand, item.Command);
+
+            item.Command!.Execute(item.CommandParameter);
+
+            Assert.Empty(viewModel.FavoriteDocuments);
+        }
+        finally
+        {
+            menu?.Close();
+            window.Close();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task RecentDocumentContextMenuOpensWithoutSelectingTheFirstItem()
     {
         using var viewModel = new MainViewModel();
