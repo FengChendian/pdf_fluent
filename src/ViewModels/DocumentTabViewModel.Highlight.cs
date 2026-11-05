@@ -91,6 +91,22 @@ public sealed partial class DocumentTabViewModel
             highlight.Rects.Any(rect => rect.Contains(x, y, tolerance, tolerance)));
     }
 
+    public async Task<string> GetSelectedHighlightTextAsync()
+    {
+        if (SelectedHighlight is not { } highlight) return string.Empty;
+        PdfTextPage text = await GetTextPageAsync(highlight.PageIndex);
+        int start = -1;
+        int end = -1;
+        foreach (PdfTextCharacter character in text.Characters)
+        {
+            PdfRect bounds = character.LooseBounds;
+            if (!highlight.Rects.Any(rect => rect.Contains(bounds.CenterX, bounds.CenterY))) continue;
+            if (start < 0) start = character.Index;
+            end = character.Index + 1;
+        }
+        return start < 0 ? string.Empty : text.GetText(start, end - start).TrimEnd('\r', '\n');
+    }
+
     partial void OnHasUnsavedHighlightsChanged(bool value) => OnPropertyChanged(nameof(DisplayFileName));
 
     partial void OnSelectedHighlightChanged(PdfHighlight? value) => NotifyTextOverlaysChanged();

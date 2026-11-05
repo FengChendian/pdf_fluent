@@ -462,7 +462,7 @@ public sealed class PdfDocumentViewTests
             window.MouseUp(center, MouseButton.Left);
             window.UpdateLayout();
 
-            flyout = Assert.IsType<MenuFlyout>(more.Flyout);
+            flyout = Assert.IsAssignableFrom<MenuFlyout>(more.Flyout);
             Assert.True(flyout.IsOpen);
             MenuItem favorite = flyout.Items.OfType<MenuItem>().Single();
             MenuFlyoutPresenter presenter = favorite.GetVisualAncestors()
@@ -473,6 +473,7 @@ public sealed class PdfDocumentViewTests
                 Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(presenter.Background).Color);
             Assert.Equal(new Thickness(0, 4), presenter.Padding);
             Assert.Equal(new CornerRadius(12), presenter.CornerRadius);
+            Assert.Equal(-1, presenter.SelectedIndex);
             Assert.Equal(new Thickness(4, 0), favorite.Margin);
             Assert.Equal(new Thickness(10, 9), favorite.Padding);
             Assert.Equal(new CornerRadius(8), favorite.CornerRadius);

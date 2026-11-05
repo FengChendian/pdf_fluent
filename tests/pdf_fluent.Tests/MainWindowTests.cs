@@ -269,7 +269,7 @@ public sealed class MainWindowTests
             window.MouseUp(buttonCenter, MouseButton.Left);
             window.UpdateLayout();
 
-            var flyout = Assert.IsType<MenuFlyout>(moreButton.Flyout);
+            var flyout = Assert.IsAssignableFrom<MenuFlyout>(moreButton.Flyout);
             Assert.True(flyout.IsOpen);
             MenuItem[] items = flyout.Items.OfType<MenuItem>().ToArray();
             Assert.Equal(new[] { "打开新文件", "关闭所有标签页" }, items.Select(item => item.Header));
@@ -279,6 +279,7 @@ public sealed class MainWindowTests
             Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
             Assert.Equal(new Thickness(0, 4), presenter.Padding);
             Assert.Equal(new CornerRadius(12), presenter.CornerRadius);
+            Assert.Equal(-1, presenter.SelectedIndex);
             Assert.All(items, item =>
             {
                 Assert.Equal(new Thickness(4, 0), item.Margin);

@@ -404,6 +404,61 @@ public sealed class PdfTextInteractionTests
     }
 
     [AvaloniaFact]
+    public async Task LeftClickSelectsHighlightForCopyWhileDraggingStartsTextSelection()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1000, Height = 700, Content = view };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            await WaitUntilAsync(() => document.Pages[0].Text is not null);
+            await document.AddWordHighlightAsync(0, 1);
+            Models.PdfHighlight highlight = Assert.Single(document.Highlights);
+            Border surface = PageSurface(view, 0);
+            Point click = PagePoint(surface, 35, 744, window);
+
+            window.MouseDown(click, MouseButton.Left);
+            Assert.Same(highlight, document.SelectedHighlight);
+            Assert.Null(document.Selection);
+            Assert.False(view.HighlightContextMenu!.IsOpen);
+            window.MouseUp(click, MouseButton.Left);
+            Assert.Same(highlight, document.SelectedHighlight);
+            Assert.Null(document.Selection);
+
+            window.KeyPress(Key.C, RawInputModifiers.Control, PhysicalKey.C, "c");
+            IClipboard clipboard = window.Clipboard!;
+            string? copied = null;
+            for (int attempt = 0; attempt < 50 && copied is null; attempt++)
+            {
+                await Task.Delay(10);
+                copied = await clipboard.TryGetTextAsync();
+            }
+            Assert.Equal("PDF", copied);
+
+            Point dragStart = PagePoint(surface, 22, 744, window);
+            Point dragEnd = PagePoint(surface, 65, 744, window);
+            window.MouseDown(dragStart, MouseButton.Left);
+            Assert.Same(highlight, document.SelectedHighlight);
+            window.MouseMove(dragEnd);
+            window.MouseUp(dragEnd, MouseButton.Left);
+
+            Assert.Null(document.SelectedHighlight);
+            Assert.Equal(0, document.Selection!.Value.Start.CharacterIndex);
+            Assert.Equal(5, document.Selection.Value.End.CharacterIndex);
+            Assert.Equal("PDF t", await document.GetSelectedTextAsync());
+            Assert.Single(document.Highlights);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task RightClickDeletesNewAndExistingHighlightsAtTheZoomedPosition()
     {
         using var service = new FakePdfDocumentService(1);
@@ -431,8 +486,20 @@ public sealed class PdfTextInteractionTests
             window.UpdateLayout();
             Assert.Same(added, document.SelectedHighlight);
             Assert.True(view.HighlightContextMenu!.IsOpen);
-            DeleteHighlightMenuItem(view).RaiseEvent(
-                new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+            MenuItem deleteItem = DeleteHighlightMenuItem(view);
+            MenuFlyoutPresenter presenter = deleteItem.GetVisualAncestors()
+                .OfType<MenuFlyoutPresenter>()
+                .Single();
+            Assert.Equal(
+                Avalonia.Media.Colors.White,
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(presenter.Background).Color);
+            Assert.Equal(new Thickness(0, 4), presenter.Padding);
+            Assert.Equal(new CornerRadius(12), presenter.CornerRadius);
+            Assert.Equal(-1, presenter.SelectedIndex);
+            Assert.Equal(new Thickness(4, 0), deleteItem.Margin);
+            Assert.Equal(new Thickness(10, 9), deleteItem.Padding);
+            Assert.Equal(new CornerRadius(8), deleteItem.CornerRadius);
+            deleteItem.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Single(document.Highlights);
             Assert.Null(document.SelectedHighlight);
 

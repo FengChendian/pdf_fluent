@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using pdf_fluent.Controls;
@@ -28,6 +29,7 @@ public partial class PdfDocumentView
     private int _selectionPressPage;
     private bool _isSelectingText;
     private bool _selectionMoved;
+    private bool _selectionStartedOnHighlight;
     private IPointer? _selectionPointer;
     private MenuFlyout? _highlightContextMenu;
 
@@ -37,7 +39,11 @@ public partial class PdfDocumentView
     {
         var deleteItem = new MenuItem { Header = "删除高亮" };
         deleteItem.Click += OnDeleteHighlightClick;
-        _highlightContextMenu = new MenuFlyout();
+        _highlightContextMenu = new UnselectedMenuFlyout
+        {
+            FlyoutPresenterTheme = (ControlTheme)Resources["MoreActionsMenuPresenterTheme"]!,
+            ItemContainerTheme = (ControlTheme)Resources["MoreActionsMenuItemTheme"]!,
+        };
         _highlightContextMenu.Items.Add(deleteItem);
         AddHandler(PointerPressedEvent, OnTextPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnTextPointerMoved, RoutingStrategies.Bubble);
@@ -71,12 +77,12 @@ public partial class PdfDocumentView
         PointerPointProperties properties = e.GetCurrentPoint(this).Properties;
         if (properties.IsRightButtonPressed)
         {
-            SelectHighlightAtPointer(e, document);
+            SelectHighlightAtPointer(e, document, showContextMenu: true);
             return;
         }
         if (!properties.IsLeftButtonPressed) return;
 
-        document.SelectedHighlight = null;
+        bool startedOnHighlight = SelectHighlightAtPointer(e, document, showContextMenu: false);
         if (!TryGetTextPosition(e, nearestOnLine: false, out PageTextPosition position) || !position.Hit.IsOnText)
         {
             if (TryGetPagePoint(e, out _, out _)) document.ClearSelection();
@@ -85,6 +91,7 @@ public partial class PdfDocumentView
 
         _isSelectingText = true;
         _selectionMoved = false;
+        _selectionStartedOnHighlight = startedOnHighlight;
         _selectionAnchor = new PdfTextPosition(position.PageIndex, position.Hit.CaretIndex);
         _selectionPressCharacter = position.Hit.CharacterIndex;
         _selectionPressPage = position.PageIndex;
@@ -99,20 +106,27 @@ public partial class PdfDocumentView
         e.Handled = true;
     }
 
-    private void SelectHighlightAtPointer(PointerEventArgs e, DocumentTabViewModel document)
+    private bool SelectHighlightAtPointer(
+        PointerEventArgs e,
+        DocumentTabViewModel document,
+        bool showContextMenu)
     {
         document.SelectedHighlight = null;
         if (TryGetPagePoint(e, out int pageIndex, out Point point) &&
             document.HitTestHighlight(pageIndex, point) is { } highlight)
         {
             document.SelectedHighlight = highlight;
-            _highlightContextMenu?.ShowAt(DocumentScroller, showAtPointer: true);
+            if (showContextMenu)
+                _highlightContextMenu?.ShowAt(DocumentScroller, showAtPointer: true);
+            else
+                _highlightContextMenu?.Hide();
+            e.Handled = true;
+            return true;
         }
-        else
-        {
-            _highlightContextMenu?.Hide();
-        }
-        e.Handled = true;
+
+        _highlightContextMenu?.Hide();
+        e.Handled = showContextMenu;
+        return false;
     }
 
     private void OnDeleteHighlightClick(object? sender, RoutedEventArgs e)
@@ -127,10 +141,19 @@ public partial class PdfDocumentView
         if (DataContext is not DocumentTabViewModel document) return;
         if (_isSelectingText)
         {
+            Vector movement = e.GetPosition(DocumentScroller) - _selectionPressPoint;
+            if (_selectionStartedOnHighlight && !_selectionMoved && movement.Length <= 3)
+            {
+                e.Handled = true;
+                return;
+            }
+            if (movement.Length > 3)
+            {
+                if (_selectionStartedOnHighlight) document.SelectedHighlight = null;
+                _selectionMoved = true;
+            }
             _lastSelectionPointer = e.GetPosition(DocumentScroller);
             UpdateTextSelection(e);
-            Vector movement = e.GetPosition(DocumentScroller) - _selectionPressPoint;
-            if (movement.Length > 3) _selectionMoved = true;
             e.Handled = true;
             return;
         }
@@ -143,6 +166,14 @@ public partial class PdfDocumentView
     private async void OnTextPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (!_isSelectingText || DataContext is not DocumentTabViewModel document) return;
+        if (_selectionStartedOnHighlight && !_selectionMoved)
+        {
+            CancelTextSelection();
+            document.ClearSelection();
+            e.Handled = true;
+            return;
+        }
+
         UpdateTextSelection(e);
         PdfTextRange? selection = document.Selection;
         bool highlight = document.IsHighlightMode;
@@ -286,6 +317,7 @@ public partial class PdfDocumentView
     private void CancelTextSelection()
     {
         _isSelectingText = false;
+        _selectionStartedOnHighlight = false;
         _selectionAutoScrollTimer?.Stop();
         _selectionPointer?.Capture(null);
         _selectionPointer = null;
@@ -316,10 +348,12 @@ public partial class PdfDocumentView
         }
 
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.C &&
-            document.HasSelection && !IsTextBoxInput(e.Source))
+            (document.HasSelection || document.SelectedHighlight is not null) && !IsTextBoxInput(e.Source))
         {
             e.Handled = true;
-            string text = await document.GetSelectedTextAsync();
+            string text = document.HasSelection
+                ? await document.GetSelectedTextAsync()
+                : await document.GetSelectedHighlightTextAsync();
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard && text.Length > 0)
                 await clipboard.SetTextAsync(text);
             return;

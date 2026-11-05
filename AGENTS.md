@@ -4,6 +4,12 @@
 - Avalonia 功能验证优先使用 Avalonia Headless 自动化测试，不要依赖桌面截图判断布局、滚动或虚拟化行为；截图仅用于人工视觉检查。
 - Avalonia Fluent 主题悬停时会直接修改按钮模板内部 `ContentPresenter` 的背景色；自定义悬停色不能只设置外层 `Button.Background`，还要覆盖 `Button:pointerover /template/ ContentPresenter#PART_ContentPresenter` 的 `Background`。Headless 测试也应检查模板实际绘制画刷，避免只验证按钮属性。
 
+# 右键菜单主题约定
+
+- 阅读器内的高亮右键菜单必须与右上角“三个点”菜单保持一致，统一使用 `MoreActionsMenuPresenterTheme`（白色背景、细边框、12 像素圆角）和 `MoreActionsMenuItemTheme`（8 像素圆角、统一内边距及悬停色），不要保留未经主题化的 `MenuFlyout` 默认外观。
+- 代码创建的 `MenuFlyout` 也必须显式设置 `FlyoutPresenterTheme` 和 `ItemContainerTheme`。Headless 回归测试应打开菜单并检查实际 `MenuFlyoutPresenter` 与 `MenuItem` 的画刷、圆角和间距，不能只检查主题属性是否赋值。
+- 所有右键菜单及所有“三个点”工具栏菜单（包括主窗口右上角和阅读器工具栏）打开时都不能默认选中第一项，也不能先显示选中再异步清除。`MenuFlyout` 统一使用 `UnselectedMenuFlyout`，在基类 `ShowAtCore` 完成默认聚焦后、返回绘制前同步将 `MenuFlyoutPresenter.SelectedIndex` 设为 `-1`；禁止使用延迟回调，避免首帧闪烁。XAML `ContextMenu` 则在 `Opened` 和 `GotFocus` 中同步清除，并应有 Headless 测试覆盖。
+
 # PDF 位图缓存约定（务必保持）
 
 - 缓存预算 `DocumentTabViewModel.MaxBitmapCacheBytes`（256 MiB）按**真实位图像素字节**（`PixelSize.Width * PixelSize.Height * 4`）记账，不按渲染倍率、页数或估算值。

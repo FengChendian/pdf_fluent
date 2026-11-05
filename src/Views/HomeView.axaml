@@ -11,7 +11,8 @@
                     Command="{Binding $parent[Window].DataContext.OpenRecentCommand}"
                     CommandParameter="{Binding}">
                 <Button.ContextMenu>
-                    <ContextMenu Classes="recent-context-menu">
+                    <ContextMenu Classes="recent-context-menu" Opened="OnRecentContextMenuOpened"
+                                 GotFocus="OnRecentContextMenuGotFocus">
                         <MenuItem Classes="danger-menu-item" Header="删除最近记录"
                                   Command="{Binding RemoveCommand}" CommandParameter="{Binding}" />
                     </ContextMenu>

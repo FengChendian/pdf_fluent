@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:pdf_fluent.ViewModels"
         xmlns:views="using:pdf_fluent.Views"
+        xmlns:controls="using:pdf_fluent.Controls"
         xmlns:i="https://github.com/projektanker/icons.avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -290,12 +291,12 @@
                             CornerRadius="10" BorderThickness="0" Cursor="Hand" ToolTip.Tip="更多操作">
                         <i:Icon Value="fa-solid fa-ellipsis" FontSize="15" Foreground="#7D8496" />
                         <Button.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedRight"
+                            <controls:UnselectedMenuFlyout Placement="BottomEdgeAlignedRight"
                                         FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
                                         ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
                                 <MenuItem Header="打开新文件" Command="{Binding OpenPdfCommand}" />
                                 <MenuItem Header="关闭所有标签页" Command="{Binding CloseAllDocumentsCommand}" />
-                            </MenuFlyout>
+                            </controls:UnselectedMenuFlyout>
                         </Button.Flyout>
                     </Button>
                 </StackPanel>

@@ -26,6 +26,7 @@ public sealed class PdfHighlightEditingTests
             new PdfTextPosition(0, 1)));
         var overlay = new PdfPageOverlay { Page = page, Document = document };
         PdfRect highlight = document.Highlights[0].Rects[0];
+        Assert.Equal(1.5, document.HighlightCornerRadius);
 
         document.Zoom = 1.75;
         document.SetVisualZoom(0.9);

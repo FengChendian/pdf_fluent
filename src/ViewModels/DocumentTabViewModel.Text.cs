@@ -18,7 +18,7 @@ public sealed partial class DocumentTabViewModel
     private bool _isHighlightMode;
 
     [ObservableProperty]
-    private double _highlightCornerRadius = 3;
+    private double _highlightCornerRadius = 1.5;
 
     public PdfTextPage? GetLoadedText(int pageIndex) =>
         pageIndex >= 0 && pageIndex < Pages.Count ? Pages[pageIndex].Text : null;

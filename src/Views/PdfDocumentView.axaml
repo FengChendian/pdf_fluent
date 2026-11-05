@@ -186,7 +186,7 @@
                     <i:Icon Value="fa-solid fa-ellipsis" FontSize="15"
                             Foreground="{Binding $parent[Button].Foreground}" />
                     <Button.Flyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedRight"
+                        <controls:UnselectedMenuFlyout Placement="BottomEdgeAlignedRight"
                                     FlyoutPresenterTheme="{StaticResource MoreActionsMenuPresenterTheme}"
                                     ItemContainerTheme="{StaticResource MoreActionsMenuItemTheme}">
                             <MenuItem x:Name="FavoriteMenuItem" Click="OnFavoriteClick">
@@ -198,7 +198,7 @@
                                     </StackPanel>
                                 </MenuItem.Header>
                             </MenuItem>
-                        </MenuFlyout>
+                        </controls:UnselectedMenuFlyout>
                     </Button.Flyout>
                 </Button>
             </StackPanel>

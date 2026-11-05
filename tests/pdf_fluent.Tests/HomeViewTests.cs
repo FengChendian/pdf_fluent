@@ -1,6 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.VisualTree;
+using pdf_fluent.Models;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
@@ -39,6 +43,54 @@ public sealed class HomeViewTests
         }
         finally
         {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task RecentDocumentContextMenuOpensWithoutSelectingTheFirstItem()
+    {
+        using var viewModel = new MainViewModel();
+        var recent = new RecentDocumentViewModel(new RecentDocument
+        {
+            FilePath = "document.pdf",
+            PageCount = 1,
+            LastOpened = DateTimeOffset.Now,
+        });
+        viewModel.RecentDocuments.Add(recent);
+        viewModel.VisibleRecentDocuments.Add(recent);
+        var window = new MainWindow
+        {
+            Width = 1040,
+            Height = 700,
+            DataContext = viewModel,
+        };
+        ContextMenu? menu = null;
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            Button card = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("recent-card") &&
+                                  ReferenceEquals(button.DataContext, recent));
+            menu = card.ContextMenu;
+            Assert.NotNull(menu);
+            Point center = card.TranslatePoint(
+                new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), window)!.Value;
+
+            window.MouseDown(center, MouseButton.Right);
+            window.MouseUp(center, MouseButton.Right);
+            window.UpdateLayout();
+
+            Assert.True(menu.IsOpen);
+            Assert.IsType<MenuItem>(menu.Items.Single());
+            Assert.Equal(-1, menu.SelectedIndex);
+        }
+        finally
+        {
+            menu?.Close();
+            recent.Dispose();
             window.Close();
         }
     }
