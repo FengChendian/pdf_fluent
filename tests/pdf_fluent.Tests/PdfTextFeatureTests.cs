@@ -139,6 +139,52 @@ public sealed class PdfTextFeatureTests
         }
     }
 
+    [AvaloniaFact]
+    public void PageTextUsesIntersectionOfMediaAndCropBoxes()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent_tests");
+        Directory.CreateDirectory(directory);
+        string filePath = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".pdf");
+        try
+        {
+            var objects = new[]
+            {
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /CropBox [0 0 400 600] >>",
+            };
+            using var pdf = new MemoryStream();
+            var offsets = new List<int>();
+            void Write(string value)
+            {
+                byte[] bytes = System.Text.Encoding.ASCII.GetBytes(value);
+                pdf.Write(bytes, 0, bytes.Length);
+            }
+
+            Write("%PDF-1.6\n");
+            for (int index = 0; index < objects.Length; index++)
+            {
+                offsets.Add((int)pdf.Length);
+                Write($"{index + 1} 0 obj\n{objects[index]}\nendobj\n");
+            }
+            int xref = (int)pdf.Length;
+            Write($"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+            foreach (int offset in offsets) Write($"{offset:0000000000} 00000 n \n");
+            Write($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+            File.WriteAllBytes(filePath, pdf.ToArray());
+
+            using var service = new PDFiumService();
+            PdfTextPage page = service.GetPageText(filePath, 0);
+
+            Assert.Equal(new PdfRect(0, 300, 200, 0), page.CropBox);
+            Assert.Equal((0d, 0d, 200d, 300d), Assert.Single(service.GetAllPageBBoxes(filePath)));
+        }
+        finally
+        {
+            if (File.Exists(filePath)) File.Delete(filePath);
+        }
+    }
+
     private static (int PageIndex, PdfTextPage Text) FirstVisibleTextPage(
         PDFiumService service,
         string filePath,

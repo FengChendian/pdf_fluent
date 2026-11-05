@@ -527,26 +527,26 @@ namespace pdf_fluent.Services
                        ?? throw new InvalidOperationException($"无法加载 PDF 第 {pageIndex + 1} 页。");
             try
             {
-                float left = 0, bottom = 0, right = 0, top = 0;
-                if (fpdf_transformpage.FPDFPageGetCropBox(page, ref left, ref bottom,
-                        ref right, ref top) == 0)
-                {
-                    fpdf_transformpage.FPDFPageGetMediaBox(page, ref left, ref bottom,
-                        ref right, ref top);
-                }
-
-                if (right <= left || top <= bottom)
-                {
-                    double width = 0, height = 0;
-                    fpdfview.FPDF_GetPageSizeByIndex(document, pageIndex, ref width, ref height);
-                    return new PdfRect(0, height, width, 0);
-                }
-                return new PdfRect(left, top, right, bottom);
+                return GetVisiblePageBox(document, pageIndex, page);
             }
             finally
             {
                 fpdfview.FPDF_ClosePage(page);
             }
+        }
+
+        private static PdfRect GetVisiblePageBox(FpdfDocumentT document, int pageIndex, FpdfPageT page)
+        {
+            using var bounds = new FS_RECTF_();
+            if (fpdfview.FPDF_GetPageBoundingBox(page, bounds) != 0 &&
+                bounds.Right > bounds.Left && bounds.Top > bounds.Bottom)
+            {
+                return new PdfRect(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+            }
+
+            double width = 0, height = 0;
+            fpdfview.FPDF_GetPageSizeByIndex(document, pageIndex, ref width, ref height);
+            return new PdfRect(0, height, width, 0);
         }
 
         // ── Lightweight wrappers (delegate directly to fpdf_text) ─────
@@ -606,11 +606,11 @@ namespace pdf_fluent.Services
         // ════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Returns the full bounding box (left, bottom, right, top) for every
-        /// page in the document.  Uses the CropBox when present; falls back
-        /// to the MediaBox.  The origin (<c>left</c>, <c>bottom</c>) is
-        /// essential for correct coordinate mapping when the visible page
-        /// area does not start at (0, 0).
+        /// Returns the visible bounding box (left, bottom, right, top) for every
+        /// page in the document. This is the intersection of the MediaBox and
+        /// CropBox. The origin (<c>left</c>, <c>bottom</c>) is essential for
+        /// correct coordinate mapping when the visible page area does not start
+        /// at (0, 0).
         /// </summary>
         public (double Left, double Bottom, double Right, double Top)[] GetAllPageBBoxes(
             string filePath)
@@ -629,14 +629,8 @@ namespace pdf_fluent.Services
                     }
                     try
                     {
-                        float left = 0, bottom = 0, right = 0, top = 0;
-                        if (fpdf_transformpage.FPDFPageGetCropBox(page, ref left, ref bottom,
-                                ref right, ref top) == 0)
-                        {
-                            fpdf_transformpage.FPDFPageGetMediaBox(page, ref left, ref bottom,
-                                ref right, ref top);
-                        }
-                        result[i] = (left, bottom, right, top);
+                        PdfRect bounds = GetVisiblePageBox(document, i, page);
+                        result[i] = (bounds.L, bounds.B, bounds.R, bounds.T);
                     }
                     finally
                     {
