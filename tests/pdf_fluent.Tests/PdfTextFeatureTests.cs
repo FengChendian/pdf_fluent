@@ -185,6 +185,109 @@ public sealed class PdfTextFeatureTests
         }
     }
 
+    [AvaloniaFact]
+    public void HitTestKeepsShortLastLineOutOfTheRightColumn()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent_tests");
+        Directory.CreateDirectory(directory);
+        string filePath = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".pdf");
+        try
+        {
+            var content = new System.Text.StringBuilder();
+            content.Append("BT\n/F1 11 Tf\n");
+            string[] leftLines = ["Short", "Left column body text", "Left column body text",
+                "Left column body text", "Left column body text"];
+            for (int row = 0; row < leftLines.Length; row++)
+            {
+                int y = 700 - row * 20;
+                content.Append($"1 0 0 1 50 {y} Tm ({leftLines[row]}) Tj\n");
+                content.Append($"1 0 0 1 330 {y} Tm (Right column body) Tj\n");
+            }
+            content.Append("ET\n");
+            string stream = content.ToString();
+            byte[] streamBytes = System.Text.Encoding.ASCII.GetBytes(stream);
+            WritePdf(filePath,
+            [
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
+                "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                $"<< /Length {streamBytes.Length} >>\nstream\n{stream}endstream",
+            ]);
+
+            using var service = new PDFiumService();
+            PdfTextPage page = service.GetPageText(filePath, 0);
+            PdfTextCharacter[] visible = page.Characters
+                .Where(character => character.HasGeometry && character.Bounds.Intersects(page.CropBox))
+                .ToArray();
+            PdfTextCharacter[] shortLine = visible
+                .Where(character => character.Bounds.CenterY is > 690 and < 705 &&
+                                    character.Bounds.CenterX < 300)
+                .ToArray();
+            PdfTextCharacter[] longLine = visible
+                .Where(character => character.Bounds.CenterY is > 670 and < 685 &&
+                                    character.Bounds.CenterX < 300)
+                .ToArray();
+            PdfTextCharacter[] rightLine = visible
+                .Where(character => character.Bounds.CenterY is > 690 and < 705 &&
+                                    character.Bounds.CenterX > 300)
+                .ToArray();
+            Assert.NotEmpty(shortLine);
+            Assert.NotEmpty(longLine);
+            Assert.NotEmpty(rightLine);
+
+            double shortLineEnd = shortLine.Max(character => character.Bounds.R);
+            double longLineEnd = longLine.Max(character => character.Bounds.R);
+            double rightColumnStart = rightLine.Min(character => character.Bounds.L);
+            double lineY = shortLine.Average(character => character.Bounds.CenterY);
+
+            // The short line's own gap starts at shortLineEnd, while the
+            // surrounding body lines only leave longLineEnd..rightColumnStart
+            // empty. A pointer between the two midpoints used to snap to the
+            // right column; it must stay in the left column.
+            double shortLineMidline = (shortLineEnd + rightColumnStart) / 2;
+            double gutterMidline = (longLineEnd + rightColumnStart) / 2;
+            Assert.True(gutterMidline > shortLineMidline + 10);
+            double probeX = (shortLineMidline + gutterMidline) / 2;
+
+            PdfTextHit left = Assert.NotNull(page.HitTest(probeX, lineY, nearestOnLine: true));
+            Assert.False(left.IsOnText);
+            Assert.True(page.Characters[left.CharacterIndex].Bounds.CenterX < 300);
+            Assert.True(page.Characters[left.CharacterIndex].Bounds.R <= shortLineEnd + 0.5);
+
+            PdfTextHit right = Assert.NotNull(page.HitTest(gutterMidline + 10, lineY, nearestOnLine: true));
+            Assert.True(page.Characters[right.CharacterIndex].Bounds.CenterX > 300);
+        }
+        finally
+        {
+            if (File.Exists(filePath)) File.Delete(filePath);
+        }
+    }
+
+    private static void WritePdf(string filePath, IReadOnlyList<string> objects)
+    {
+        using var pdf = new MemoryStream();
+        var offsets = new List<int>();
+        void Write(string value)
+        {
+            byte[] bytes = System.Text.Encoding.ASCII.GetBytes(value);
+            pdf.Write(bytes, 0, bytes.Length);
+        }
+
+        Write("%PDF-1.6\n");
+        for (int index = 0; index < objects.Count; index++)
+        {
+            offsets.Add((int)pdf.Length);
+            Write($"{index + 1} 0 obj\n{objects[index]}\nendobj\n");
+        }
+        int xref = (int)pdf.Length;
+        Write($"xref\n0 {objects.Count + 1}\n0000000000 65535 f \n");
+        foreach (int offset in offsets) Write($"{offset:0000000000} 00000 n \n");
+        Write($"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        File.WriteAllBytes(filePath, pdf.ToArray());
+    }
+
     private static (int PageIndex, PdfTextPage Text) FirstVisibleTextPage(
         PDFiumService service,
         string filePath,

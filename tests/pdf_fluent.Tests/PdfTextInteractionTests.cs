@@ -69,6 +69,162 @@ public sealed class PdfTextInteractionTests
     }
 
     [AvaloniaFact]
+    public async Task DraggingThroughColumnGutterSwitchesColumnsAtItsMidline()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1000, Height = 700, Content = view };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            PdfPageViewModel page = document.Pages[0];
+            await WaitUntilAsync(() => page.Text is not null);
+            // The right column deliberately comes first in reading order:
+            // that is the case where a premature right-column caret would
+            // visibly select right-column text.
+            page.SetText(new Models.PdfTextPage(0, new Models.PdfRect(0, 800, 600, 0),
+            [
+                new Models.PdfTextCharacter(0, 'R', new Models.PdfRect(200, 750, 210, 738), new Models.PdfRect(199, 751, 211, 737)),
+                new Models.PdfTextCharacter(1, 'S', new Models.PdfRect(200, 730, 210, 718), new Models.PdfRect(199, 731, 211, 717)),
+                new Models.PdfTextCharacter(2, 'T', new Models.PdfRect(200, 710, 210, 698), new Models.PdfRect(199, 711, 211, 697)),
+                new Models.PdfTextCharacter(3, 'L', new Models.PdfRect(20, 750, 30, 738), new Models.PdfRect(19, 751, 31, 737)),
+                new Models.PdfTextCharacter(4, 'M', new Models.PdfRect(20, 730, 30, 718), new Models.PdfRect(19, 731, 31, 717)),
+                new Models.PdfTextCharacter(5, 'N', new Models.PdfRect(20, 710, 30, 698), new Models.PdfRect(19, 711, 31, 697)),
+            ]));
+            Border surface = PageSurface(view, 0);
+            Point press = PagePoint(surface, 22, 744, window);
+            window.MouseDown(press, MouseButton.Left);
+
+            // x=80 is left of the gutter midline (x=115): stay in the left column.
+            Point leftHalf = PagePoint(surface, 80, 744, window);
+            window.MouseMove(leftHalf);
+            Assert.NotNull(document.Selection);
+            Assert.Equal(4, document.Selection.Value.End.CharacterIndex);
+            Assert.Equal("L", await document.GetSelectedTextAsync());
+
+            // x=150 is past the midline: the endpoint may now enter the right column.
+            Point rightHalf = PagePoint(surface, 150, 744, window);
+            window.MouseMove(rightHalf);
+            Assert.NotNull(document.Selection);
+            Assert.Equal(0, document.Selection.Value.Start.CharacterIndex);
+            Assert.Equal("RST", await document.GetSelectedTextAsync());
+            window.MouseUp(rightHalf, MouseButton.Left);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DraggingOnShortLastLineStaysInLeftColumnUntilGutterMidline()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1000, Height = 700, Content = view };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            PdfPageViewModel page = document.Pages[0];
+            await WaitUntilAsync(() => page.Text is not null);
+            page.SetText(new Models.PdfTextPage(0, new Models.PdfRect(0, 800, 600, 0),
+            [
+                new Models.PdfTextCharacter(0, 'R', new Models.PdfRect(200, 750, 210, 738), new Models.PdfRect(199, 751, 211, 737)),
+                new Models.PdfTextCharacter(1, 'S', new Models.PdfRect(200, 730, 210, 718), new Models.PdfRect(199, 731, 211, 717)),
+                new Models.PdfTextCharacter(2, 'T', new Models.PdfRect(200, 710, 210, 698), new Models.PdfRect(199, 711, 211, 697)),
+                // The first left line is a short paragraph last line.
+                new Models.PdfTextCharacter(3, 'S', new Models.PdfRect(20, 750, 30, 738), new Models.PdfRect(19, 751, 31, 737)),
+                new Models.PdfTextCharacter(4, 'a', new Models.PdfRect(20, 730, 30, 718), new Models.PdfRect(19, 731, 31, 717)),
+                new Models.PdfTextCharacter(5, 'b', new Models.PdfRect(30, 730, 40, 718), new Models.PdfRect(29, 731, 41, 717)),
+                new Models.PdfTextCharacter(6, 'c', new Models.PdfRect(40, 730, 50, 718), new Models.PdfRect(39, 731, 51, 717)),
+                new Models.PdfTextCharacter(7, 'd', new Models.PdfRect(50, 730, 60, 718), new Models.PdfRect(49, 731, 61, 717)),
+                new Models.PdfTextCharacter(8, 'e', new Models.PdfRect(60, 730, 70, 718), new Models.PdfRect(59, 731, 71, 717)),
+                new Models.PdfTextCharacter(9, 'f', new Models.PdfRect(70, 730, 80, 718), new Models.PdfRect(69, 731, 81, 717)),
+                new Models.PdfTextCharacter(10, 'a', new Models.PdfRect(20, 710, 30, 698), new Models.PdfRect(19, 711, 31, 697)),
+                new Models.PdfTextCharacter(11, 'b', new Models.PdfRect(30, 710, 40, 698), new Models.PdfRect(29, 711, 41, 697)),
+                new Models.PdfTextCharacter(12, 'c', new Models.PdfRect(40, 710, 50, 698), new Models.PdfRect(39, 711, 51, 697)),
+                new Models.PdfTextCharacter(13, 'd', new Models.PdfRect(50, 710, 60, 698), new Models.PdfRect(49, 711, 61, 697)),
+                new Models.PdfTextCharacter(14, 'e', new Models.PdfRect(60, 710, 70, 698), new Models.PdfRect(59, 711, 71, 697)),
+                new Models.PdfTextCharacter(15, 'f', new Models.PdfRect(70, 710, 80, 698), new Models.PdfRect(69, 711, 81, 697)),
+            ]));
+            Border surface = PageSurface(view, 0);
+            Point press = PagePoint(surface, 22, 744, window);
+            window.MouseDown(press, MouseButton.Left);
+
+            // The short line's own gap midpoint is x=115, but the gutter shared
+            // with the next line is [70,200] (midline 135). At x=120 the pointer
+            // is on the left side of the real gutter and must not select the
+            // right column.
+            Point leftHalf = PagePoint(surface, 120, 744, window);
+            window.MouseMove(leftHalf);
+            Assert.NotNull(document.Selection);
+            Assert.Equal(4, document.Selection.Value.End.CharacterIndex);
+            Assert.Equal("S", await document.GetSelectedTextAsync());
+
+            Point rightHalf = PagePoint(surface, 150, 744, window);
+            window.MouseMove(rightHalf);
+            Assert.NotNull(document.Selection);
+            Assert.Equal(0, document.Selection.Value.Start.CharacterIndex);
+            Assert.Equal("RST", await document.GetSelectedTextAsync());
+            window.MouseUp(rightHalf, MouseButton.Left);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DraggingThroughStaggeredGutterStaysLeftUntilMidline()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1000, Height = 700, Content = view };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            PdfPageViewModel page = document.Pages[0];
+            await WaitUntilAsync(() => page.Text is not null);
+            page.SetText(new Models.PdfTextPage(0, new Models.PdfRect(0, 800, 600, 0),
+            [
+                new Models.PdfTextCharacter(0, 'A', new Models.PdfRect(20, 750, 30, 738), new Models.PdfRect(19, 751, 31, 737)),
+                new Models.PdfTextCharacter(1, 'B', new Models.PdfRect(20, 700, 30, 688), new Models.PdfRect(19, 701, 31, 687)),
+                new Models.PdfTextCharacter(2, 'R', new Models.PdfRect(400, 750, 410, 738), new Models.PdfRect(399, 751, 411, 737)),
+                new Models.PdfTextCharacter(3, 'S', new Models.PdfRect(400, 725, 410, 713), new Models.PdfRect(399, 726, 411, 712)),
+                new Models.PdfTextCharacter(4, 'T', new Models.PdfRect(400, 700, 410, 688), new Models.PdfRect(399, 701, 411, 687)),
+            ]));
+            Border surface = PageSurface(view, 0);
+            Point left = PagePoint(surface, 22, 744, window);
+            window.MouseDown(left, MouseButton.Left);
+
+            // The right-only line at y=719 has no left counterpart, but the
+            // gutter of the surrounding lines has its midline at x=215.
+            // Left of it, the endpoint must not jump to the right column.
+            Point gap = PagePoint(surface, 100, 719, window);
+            window.MouseMove(gap);
+            Assert.Null(document.Selection);
+
+            Point right = PagePoint(surface, 300, 719, window);
+            window.MouseMove(right);
+            Assert.Equal(3, document.Selection!.Value.End.CharacterIndex);
+            window.MouseUp(right, MouseButton.Left);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task MouseSelectionContinuesAcrossPageBoundary()
     {
         using var service = new FakePdfDocumentService(2);
