@@ -47,6 +47,9 @@
             </Style>
         </ControlTheme>
     </Window.Resources>
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SelectedDocument.SaveHighlightsCommand}" />
+    </Window.KeyBindings>
     <Window.Styles>
         <Style Selector="Button.plain-button">
             <Setter Property="Background" Value="Transparent" />

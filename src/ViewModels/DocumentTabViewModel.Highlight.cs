@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using pdf_fluent.Models;
 
 namespace pdf_fluent.ViewModels;
@@ -12,6 +13,7 @@ public sealed partial class DocumentTabViewModel
     private readonly Dictionary<int, Task> _highlightLoadTasks = new();
     private readonly HashSet<int> _loadedHighlightPages = new();
     private readonly HashSet<int> _modifiedHighlightPages = new();
+    private readonly Dictionary<int, List<PdfHighlight>> _savedHighlightPages = new();
 
     public ObservableCollection<PdfHighlight> Highlights { get; } = [];
 
@@ -47,12 +49,11 @@ public sealed partial class DocumentTabViewModel
                 pageIndex,
                 rects,
                 Color.FromArgb(96, 255, 235, 59)));
-            _modifiedHighlightPages.Add(pageIndex);
+            UpdateHighlightModifiedState(pageIndex);
             added = true;
         }
 
         if (!added) return;
-        HasUnsavedHighlights = true;
         HighlightErrorMessage = null;
         ClearSelection();
         NotifyTextOverlaysChanged();
@@ -72,11 +73,25 @@ public sealed partial class DocumentTabViewModel
     {
         if (!Highlights.Remove(highlight)) return false;
         if (ReferenceEquals(SelectedHighlight, highlight)) SelectedHighlight = null;
-        _modifiedHighlightPages.Add(highlight.PageIndex);
-        HasUnsavedHighlights = true;
+        UpdateHighlightModifiedState(highlight.PageIndex);
         HighlightErrorMessage = null;
         NotifyTextOverlaysChanged();
         return true;
+    }
+
+    private void UpdateHighlightModifiedState(int pageIndex)
+    {
+        List<PdfHighlight> current = Highlights
+            .Where(highlight => highlight.PageIndex == pageIndex)
+            .ToList();
+        List<PdfHighlight> saved = _savedHighlightPages.TryGetValue(pageIndex, out List<PdfHighlight>? value)
+            ? value
+            : [];
+        if (current.Count == saved.Count && current.All(saved.Contains))
+            _modifiedHighlightPages.Remove(pageIndex);
+        else
+            _modifiedHighlightPages.Add(pageIndex);
+        HasUnsavedHighlights = _modifiedHighlightPages.Count > 0;
     }
 
     public PdfHighlight? HitTestHighlight(int pageIndex, Point pagePoint, double toleranceInDips = 2)
@@ -120,6 +135,7 @@ public sealed partial class DocumentTabViewModel
         _highlightLoadTasks.Clear();
         _loadedHighlightPages.Clear();
         _modifiedHighlightPages.Clear();
+        _savedHighlightPages.Clear();
     }
 
     private Task EnsurePageHighlightsAsync(int pageIndex)
@@ -140,6 +156,7 @@ public sealed partial class DocumentTabViewModel
             List<PdfHighlight> highlights = await Task.Run(() =>
                 _pdfService.LoadHighlights(FilePath, page.PageIndex));
             if (!IsCurrentPage(page) || !_loadedHighlightPages.Add(page.PageIndex)) return;
+            _savedHighlightPages[page.PageIndex] = highlights;
             foreach (PdfHighlight highlight in highlights) Highlights.Add(highlight);
             NotifyTextOverlaysChanged();
         }
@@ -167,6 +184,7 @@ public sealed partial class DocumentTabViewModel
         page.PageIndex < Pages.Count &&
         ReferenceEquals(Pages[page.PageIndex], page);
 
+    [RelayCommand]
     public async Task<bool> SaveHighlightsAsync()
     {
         if (!HasUnsavedHighlights) return true;
@@ -188,8 +206,13 @@ public sealed partial class DocumentTabViewModel
                 _pdfService.SaveHighlightsToTemp(FilePath, snapshot, tempPath, modifiedPages));
             _pdfService.ReleaseDocument(FilePath);
             File.Replace(tempPath, FilePath, null);
-            _modifiedHighlightPages.ExceptWith(modifiedPages);
-            HasUnsavedHighlights = _modifiedHighlightPages.Count > 0;
+            foreach (int pageIndex in modifiedPages)
+            {
+                _savedHighlightPages[pageIndex] = snapshot
+                    .Where(highlight => highlight.PageIndex == pageIndex)
+                    .ToList();
+                UpdateHighlightModifiedState(pageIndex);
+            }
             HighlightErrorMessage = null;
             return true;
         }

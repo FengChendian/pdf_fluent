@@ -189,6 +189,69 @@ public sealed class PdfDocumentViewTests
     }
 
     [AvaloniaFact]
+    public async Task FloatingPageIndicatorIsBottomRightAndRightAlignedWithPageNavigation()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            view.ShowPageIndicator();
+            window.UpdateLayout();
+            Border navigation = view.GetVisualDescendants().OfType<Border>()
+                .Single(border => border.Name == "PageNavigation");
+            Border indicator = view.GetVisualDescendants().OfType<Border>()
+                .Single(border => border.Name == "PageIndicatorOverlay");
+            Point navigationTopRight = navigation.TranslatePoint(
+                new Point(navigation.Bounds.Width, 0), view)!.Value;
+            Point indicatorBottomRight = indicator.TranslatePoint(
+                new Point(indicator.Bounds.Width, indicator.Bounds.Height), view)!.Value;
+
+            Assert.Equal(navigationTopRight.X, indicatorBottomRight.X, precision: 1);
+            Assert.Equal(16, navigationTopRight.Y, precision: 1);
+            Assert.Equal(view.Bounds.Width - 20, navigationTopRight.X, precision: 1);
+            Assert.Equal(view.Bounds.Height - 20, indicatorBottomRight.Y, precision: 1);
+            Assert.True(indicatorBottomRight.Y > view.Bounds.Height / 2);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PageGapIsHalfOfItsOriginalHeight()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 2);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var panel = view.GetVisualDescendants()
+                .OfType<pdf_fluent.Controls.PdfVirtualizingPanel>()
+                .Single();
+            double firstPageBottom = panel.ItemTopAt(0, panel.Zoom) +
+                                     PdfPageViewModel.PageHeightAt(document.Pages[0], panel.Zoom);
+            double secondPageTop = panel.ItemTopAt(1, panel.Zoom);
+
+            Assert.Equal(16.5, secondPageTop - firstPageBottom, precision: 1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task FloatingPageIndicatorShowsOnlyWhenThePageChangesAndHidesAfterTheDelay()
     {
         using var service = new FakePdfDocumentService(pageCount: 3);

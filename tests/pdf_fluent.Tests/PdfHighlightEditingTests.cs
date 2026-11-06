@@ -100,9 +100,40 @@ public sealed class PdfHighlightEditingTests
 
         Assert.True(document.RemoveHighlight(added));
         Assert.Equal(0, service.SaveCallCount);
-        Assert.True(document.HasUnsavedHighlights);
+        Assert.False(document.HasUnsavedHighlights);
         Assert.True(document.RemoveHighlight(document.Highlights[0]));
         Assert.Empty(document.Highlights);
+        Assert.True(document.HasUnsavedHighlights);
+        Assert.Equal(0, service.SaveCallCount);
+    }
+
+    [AvaloniaFact]
+    public async Task RemovingNewHighlightRestoresCleanStateAndClosesWithoutConfirmation()
+    {
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        await document.AddWordHighlightAsync(0, 1);
+        PdfHighlight added = Assert.Single(document.Highlights);
+        Assert.True(document.HasUnsavedHighlights);
+
+        Assert.True(document.RemoveHighlight(added));
+        Assert.False(document.HasUnsavedHighlights);
+        Assert.Equal("unused", document.DisplayFileName);
+
+        using var viewModel = new MainViewModel();
+        viewModel.OpenDocuments.Add(document);
+        viewModel.SelectedDocument = document;
+        bool confirmationCalled = false;
+        viewModel.DocumentCloseConfirmation = _ =>
+        {
+            confirmationCalled = true;
+            return Task.FromResult(DocumentCloseDecision.Cancel);
+        };
+        await viewModel.CloseDocumentCommand.ExecuteAsync(document);
+
+        Assert.False(confirmationCalled);
+        Assert.DoesNotContain(document, viewModel.OpenDocuments);
         Assert.Equal(0, service.SaveCallCount);
     }
 

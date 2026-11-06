@@ -7,7 +7,7 @@ namespace pdf_fluent.ViewModels;
 public sealed partial class PdfPageViewModel : ViewModelBase
 {
     /// <summary>Vertical spacing below a page in the continuous document flow.</summary>
-    public const double FooterHeight = 33;
+    public const double FooterHeight = 16.5;
 
     private readonly double _baseWidth;
     private readonly double _baseHeight;

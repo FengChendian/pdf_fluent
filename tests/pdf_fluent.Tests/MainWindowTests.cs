@@ -365,6 +365,47 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
+    public async Task CtrlSSavesHighlightsAndCloseDoesNotAskAgain()
+    {
+        string filePath = Path.Combine(
+            Path.GetTempPath(),
+            $"pdf_fluent-tests-{Guid.NewGuid():N}.pdf");
+        File.WriteAllBytes(filePath, []);
+        using var viewModel = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        using var document = new DocumentTabViewModel(filePath, service);
+        await document.LoadAsync();
+        await document.AddWordHighlightAsync(0, 1);
+        viewModel.OpenDocuments.Add(document);
+        viewModel.SelectedDocument = document;
+        bool confirmationCalled = false;
+        viewModel.DocumentCloseConfirmation = _ =>
+        {
+            confirmationCalled = true;
+            return Task.FromResult(DocumentCloseDecision.Cancel);
+        };
+        var window = new MainWindow { DataContext = viewModel };
+        try
+        {
+            window.Show();
+            window.KeyPress(Key.S, RawInputModifiers.Control, PhysicalKey.S, "s");
+            await PdfTestHelpers.WaitUntilAsync(() =>
+                service.SaveCallCount == 1 && !document.HasUnsavedHighlights);
+
+            Assert.Null(document.HighlightErrorMessage);
+            Assert.Equal(1, service.SaveCallCount);
+            await viewModel.CloseDocumentCommand.ExecuteAsync(document);
+            Assert.False(confirmationCalled);
+            Assert.DoesNotContain(document, viewModel.OpenDocuments);
+        }
+        finally
+        {
+            if (window.IsVisible) window.Close();
+            if (File.Exists(filePath)) File.Delete(filePath);
+        }
+    }
+
+    [AvaloniaFact]
     public void NativeTitleBarIsUsedWithoutAnAdditionalInClientTitle()
     {
         using var viewModel = new MainViewModel();
