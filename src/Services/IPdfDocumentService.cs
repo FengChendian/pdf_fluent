@@ -7,6 +7,8 @@ public interface IPdfDocumentService
 {
     (double Width, double Height)[] GetPageSizes(string filePath);
 
+    List<TocItem> GetBookmarks(string filePath);
+
     PdfTextPage GetPageText(
         string filePath,
         int pageNumber,

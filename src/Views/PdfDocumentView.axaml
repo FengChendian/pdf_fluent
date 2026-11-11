@@ -75,12 +75,39 @@
         <Style Selector="ToggleButton.tool-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F2F8" />
         </Style>
+        <Style Selector="ToggleButton.tool-button:disabled">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#C4C8D2" />
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+        <Style Selector="ToggleButton.tool-button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
         <Style Selector="ToggleButton.tool-button:checked">
             <Setter Property="Background" Value="#E8E3FF" />
             <Setter Property="Foreground" Value="#6C5CE7" />
         </Style>
         <Style Selector="ToggleButton.tool-button:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#E8E3FF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button">
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:pointerover">
+            <Setter Property="Foreground" Value="#6C5CE7" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:checked">
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:disabled">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.page-surface">
             <Setter Property="BoxShadow" Value="0 4 22 0 #14000000" />
@@ -91,6 +118,63 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="24" />
             <Setter Property="BoxShadow" Value="0 4 18 0 #14000000" />
+        </Style>
+        <Style Selector="Grid.toc-flyout">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="Margin" Value="0,58,0,20" />
+        </Style>
+        <Style Selector="Grid.toc-flyout.open">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Margin" Value="0,66,0,20" />
+        </Style>
+        <Style Selector="ToggleButton.toc-expander">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Foreground" Value="#747B8D" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="0" />
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.toc-expander:checked">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#747B8D" />
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="90" />
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.toc-expander:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ToggleButton.toc-expander:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ToggleButton.toc-expander:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.toc-item">
+            <Setter Property="Padding" Value="7,8" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Foreground" Value="#424758" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.toc-item:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F3F9" />
         </Style>
     </UserControl.Styles>
 
@@ -134,6 +218,18 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
+
+        <ToggleButton x:Name="TableOfContentsButton" Classes="tool-button toc-main-button"
+                      Width="48" Height="48"
+                      HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,16,0,0"
+                      CornerRadius="24" BorderBrush="#DDE2EC" BorderThickness="1"
+                      IsVisible="{Binding IsLoaded}"
+                      IsChecked="{Binding IsTableOfContentsOpen}"
+                      IsEnabled="{Binding HasTableOfContents}"
+                      ToolTip.Tip="目录">
+            <i:Icon Value="fa-solid fa-list-ul" FontSize="14"
+                    Foreground="{Binding $parent[ToggleButton].Foreground}" />
+        </ToggleButton>
 
         <Border x:Name="ReaderToolbar" Classes="reader-pill" Padding="10,6"
                 HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0"
@@ -204,7 +300,7 @@
             </StackPanel>
         </Border>
 
-        <Border x:Name="PageNavigation" Classes="reader-pill" Padding="5,3"
+        <Border x:Name="PageNavigation" Classes="reader-pill" Padding="10,6" Height="48"
                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,20,0"
                 IsVisible="{Binding IsLoaded}">
             <StackPanel Orientation="Horizontal" Spacing="3" Height="34">
@@ -222,6 +318,57 @@
                 </Button>
             </StackPanel>
         </Border>
+
+        <Grid x:Name="TableOfContentsOverlay" Classes="toc-flyout"
+              Width="330" MaxWidth="360"
+              HorizontalAlignment="Left" VerticalAlignment="Stretch"
+              IsVisible="False">
+            <Border x:Name="TableOfContentsPanel" Margin="0,8,0,0"
+                    Background="#FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
+                    CornerRadius="12" BoxShadow="0 8 26 0 #1F26334A" />
+            <Path x:Name="TableOfContentsPointerFill"
+                  Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8 L 20,12 L 0,12 Z"
+                  Width="20" Height="12" Margin="34,0,0,0"
+                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                  Fill="#FFFFFF" IsHitTestVisible="False" />
+            <Path x:Name="TableOfContentsPointer"
+                  Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8"
+                  Width="20" Height="12" Margin="34,0,0,0"
+                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                  Stroke="#DDE2EC" StrokeThickness="1" IsHitTestVisible="False" />
+            <Border Margin="0,8,0,0" CornerRadius="12" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Padding="16,13,16,10" BorderBrush="#ECECF2" BorderThickness="0,0,0,1">
+                        <TextBlock Text="目录" FontSize="13" FontWeight="SemiBold" Foreground="#424758" />
+                    </Border>
+                    <ScrollViewer x:Name="TableOfContentsScroller" Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="TocItems" ItemsSource="{Binding VisibleTocEntries}" Padding="8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:TocEntryViewModel">
+                                    <Grid ColumnDefinitions="28,*" Margin="{Binding Indent}">
+                                        <ToggleButton x:Name="TocExpanderButton" Classes="toc-expander"
+                                                      IsChecked="{Binding IsExpanded}"
+                                                      IsVisible="{Binding HasChildren}"
+                                                      ToolTip.Tip="展开或收起子目录">
+                                            <Path Data="M 2,0 L 8,5 L 2,10 Z" Width="8" Height="10"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Fill="{Binding $parent[ToggleButton].Foreground}" />
+                                        </ToggleButton>
+                                        <Button x:Name="TocNavigateButton" Grid.Column="1" Classes="toc-item"
+                                                Click="OnTocItemClick" IsEnabled="{Binding CanNavigate}">
+                                            <TextBlock Text="{Binding Title}" FontSize="12" LineHeight="18"
+                                                       TextWrapping="Wrap" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
 
         <Border x:Name="PageIndicatorOverlay" Background="#F2FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
                 CornerRadius="16" Padding="16,8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,20"

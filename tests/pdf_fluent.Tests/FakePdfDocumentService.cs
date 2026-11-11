@@ -74,6 +74,10 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
             .Select(index => ((double)600, (double)(800 + index % 3 * 100)))
             .ToArray();
 
+    public List<TocItem> Bookmarks { get; set; } = [];
+
+    public List<TocItem> GetBookmarks(string filePath) => Bookmarks;
+
     public Avalonia.Media.Imaging.WriteableBitmap RenderPageToWriteableBitmap(
         string filePath,
         int pageNumber = 0,

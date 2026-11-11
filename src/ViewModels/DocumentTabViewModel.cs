@@ -179,10 +179,12 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         ErrorMessage = null;
         ClearPages();
         ResetHighlights();
+        ResetTableOfContents();
 
         try
         {
-            var sizes = await Task.Run(() => _pdfService.GetPageSizes(FilePath));
+            var (sizes, bookmarks) = await Task.Run(() =>
+                (_pdfService.GetPageSizes(FilePath), _pdfService.GetBookmarks(FilePath)));
             if (_disposed) return;
 
             _renderZoom = _zoom;
@@ -192,6 +194,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
                     new PdfPageViewModel(index, size.Width, size.Height, _zoom)));
             PageCount = sizes.Length;
             Pages = pages;
+            SetTableOfContents(bookmarks);
         }
         catch (Exception ex)
         {

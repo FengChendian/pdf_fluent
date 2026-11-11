@@ -24,6 +24,7 @@ public partial class PdfDocumentView : UserControl
     private TopLevel? _topLevel;
     private IDisposable? _renderScalingTimer;
     private IDisposable? _pageIndicatorTimer;
+    private IDisposable? _tocCloseTimer;
     private DocumentTabViewModel? _observedDocument;
     private Vector? _scrollOffsetToRestore;
     private int _lastObservedPageNumber = 1;
@@ -34,12 +35,27 @@ public partial class PdfDocumentView : UserControl
         InitializeComponent();
         InitializeTextInteraction();
         DocumentScroller.ScrollChanged += OnDocumentScrollChanged;
+        TableOfContentsButton.IsCheckedChanged += OnTableOfContentsButtonToggled;
+        TableOfContentsOverlay.Transitions =
+        [
+            new Avalonia.Animation.DoubleTransition
+            {
+                Property = OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(180),
+            },
+            new Avalonia.Animation.ThicknessTransition
+            {
+                Property = MarginProperty,
+                Duration = TimeSpan.FromMilliseconds(180),
+            },
+        ];
         AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
     }
 
     internal PdfZoomController? ZoomController => _zoomController;
     internal TimeSpan PageIndicatorAutoHideDelay { get; set; } = TimeSpan.FromMilliseconds(800);
     internal bool IsPageIndicatorVisible => PageIndicatorOverlay.IsVisible;
+    internal bool IsTableOfContentsVisible => TableOfContentsOverlay.IsVisible;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -58,6 +74,7 @@ public partial class PdfDocumentView : UserControl
         _observedDocument = document;
         _scrollOffsetToRestore = document?.ScrollOffset;
         HidePageIndicator();
+        CloseTableOfContentsImmediately();
         AttachTextDocument(document);
         _lastObservedPageNumber = document?.CurrentPage ?? 1;
         _pendingPageIndex = null;
@@ -74,6 +91,7 @@ public partial class PdfDocumentView : UserControl
         DetachRenderScaling();
         DetachTextInteraction();
         HidePageIndicator();
+        CloseTableOfContentsImmediately();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);
     }
@@ -206,6 +224,55 @@ public partial class PdfDocumentView : UserControl
         _pendingPageIndex = targetIndex;
         PageItems.ScrollIntoView(targetIndex);
         document.CurrentPage = targetIndex + 1;
+    }
+
+    private void OnTocItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DocumentTabViewModel document ||
+            (sender as Control)?.DataContext is not TocEntryViewModel entry ||
+            entry.PageIndex < 0 || entry.PageIndex >= document.PageCount)
+        {
+            return;
+        }
+
+        _pendingPageIndex = entry.PageIndex;
+        PageItems.ScrollIntoView(entry.PageIndex);
+        document.CurrentPage = entry.PageIndex + 1;
+    }
+
+    private void OnTableOfContentsButtonToggled(object? sender, RoutedEventArgs e)
+    {
+        _tocCloseTimer?.Dispose();
+        _tocCloseTimer = null;
+
+        if (TableOfContentsButton.IsChecked == true)
+        {
+            TableOfContentsOverlay.IsVisible = true;
+            TableOfContentsOverlay.Classes.Add("open");
+            return;
+        }
+
+        TableOfContentsOverlay.Classes.Remove("open");
+        _tocCloseTimer = DispatcherTimer.RunOnce(
+            HideTableOfContentsAfterClose,
+            TimeSpan.FromMilliseconds(180));
+    }
+
+    private void HideTableOfContentsAfterClose()
+    {
+        _tocCloseTimer = null;
+        if (TableOfContentsButton.IsChecked != true) TableOfContentsOverlay.IsVisible = false;
+    }
+
+    private void CloseTableOfContentsImmediately()
+    {
+        if (DataContext is DocumentTabViewModel document)
+            document.IsTableOfContentsOpen = false;
+
+        _tocCloseTimer?.Dispose();
+        _tocCloseTimer = null;
+        TableOfContentsOverlay.Classes.Remove("open");
+        TableOfContentsOverlay.IsVisible = false;
     }
 
     private void OnFavoriteClick(object? sender, RoutedEventArgs e)
