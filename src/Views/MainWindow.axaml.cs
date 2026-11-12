@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -14,6 +15,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel viewModel)
@@ -25,6 +29,31 @@ public partial class MainWindow : Window
         Closing += OnWindowClosing;
         Closed += (_, _) => (DataContext as MainViewModel)?.Dispose();
     }
+
+    private static void OnDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = GetPdfFilePaths(e.DataTransfer).Length > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        string[] filePaths = GetPdfFilePaths(e.DataTransfer);
+        e.DragEffects = filePaths.Length > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+
+        if (DataContext is not MainViewModel viewModel) return;
+        foreach (string filePath in filePaths)
+            await viewModel.OpenDocumentAsync(filePath);
+    }
+
+    private static string[] GetPdfFilePaths(IDataTransfer data) =>
+        (data.TryGetFiles() ?? [])
+            .OfType<IStorageFile>()
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
+            .Select(path => path!)
+            .ToArray();
 
     private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {

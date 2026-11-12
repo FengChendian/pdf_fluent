@@ -427,4 +427,83 @@ public sealed class MainWindowTests
             window.Close();
         }
     }
+
+    [AvaloniaFact]
+    public async Task DroppingExternalFilesOpensEveryPdfAndIgnoresOtherFiles()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string firstPath = Path.Combine(directory, "first.pdf");
+        string secondPath = Path.Combine(directory, "second.PDF");
+        string textPath = Path.Combine(directory, "notes.txt");
+        File.Copy(PdfTestHelpers.SamplePdfPath(), firstPath);
+        File.Copy(PdfTestHelpers.SamplePdfPath(), secondPath);
+        File.WriteAllText(textPath, "Not a PDF");
+        using var viewModel = new MainViewModel(
+            new PDFiumService(),
+            new RecentDocumentsService(Path.Combine(directory, "recent.json")),
+            new FavoriteDocumentsService(Path.Combine(directory, "favorites.json")));
+        var window = new MainWindow { DataContext = viewModel };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            Point dropPoint = new(window.Bounds.Width / 2, window.Bounds.Height / 2);
+
+            DataTransfer textOnly = await CreateFileTransferAsync(window, textPath);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.DragOver,
+                textOnly, DragDropEffects.Copy, RawInputModifiers.None);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.Drop,
+                textOnly, DragDropEffects.Copy, RawInputModifiers.None);
+            Assert.Empty(viewModel.OpenDocuments);
+
+            DataTransfer files = await CreateFileTransferAsync(window, firstPath, textPath, secondPath);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.DragOver,
+                files, DragDropEffects.Copy, RawInputModifiers.None);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.Drop,
+                files, DragDropEffects.Copy, RawInputModifiers.None);
+            await PdfTestHelpers.WaitUntilAsync(
+                () => !viewModel.IsOpening && viewModel.OpenDocuments.Count == 2 &&
+                      ReferenceEquals(viewModel.SelectedDocument, viewModel.OpenDocuments[1]) &&
+                      viewModel.SelectedDocument.IsLoaded,
+                TimeSpan.FromSeconds(15));
+
+            Assert.Equal(new[] { firstPath, secondPath }, viewModel.OpenDocuments.Select(document => document.FilePath));
+            Assert.All(viewModel.OpenDocuments, document => Assert.Null(document.ErrorMessage));
+            Assert.Equal(2, viewModel.RecentDocuments.Count);
+            Assert.Equal(secondPath, viewModel.SelectedDocument!.FilePath);
+
+            DataTransfer duplicate = await CreateFileTransferAsync(window, firstPath);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.DragOver,
+                duplicate, DragDropEffects.Copy, RawInputModifiers.None);
+            window.DragDrop(
+                dropPoint, Avalonia.Input.Raw.RawDragEventType.Drop,
+                duplicate, DragDropEffects.Copy, RawInputModifiers.None);
+
+            Assert.Equal(2, viewModel.OpenDocuments.Count);
+            Assert.Equal(firstPath, viewModel.SelectedDocument.FilePath);
+        }
+        finally
+        {
+            if (window.IsVisible) window.Close();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task<DataTransfer> CreateFileTransferAsync(MainWindow window, params string[] paths)
+    {
+        var data = new DataTransfer();
+        foreach (string path in paths)
+        {
+            var file = await window.StorageProvider.TryGetFileFromPathAsync(new Uri(Path.GetFullPath(path)));
+            Assert.NotNull(file);
+            data.Add(DataTransferItem.CreateFile(file));
+        }
+        return data;
+    }
 }
