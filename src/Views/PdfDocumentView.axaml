@@ -107,7 +107,10 @@
             <Setter Property="Background" Value="#FFFFFF" />
         </Style>
         <Style Selector="ToggleButton.toc-main-button:disabled">
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="ToggleButton.toc-main-button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#FFFFFF" />
         </Style>
         <Style Selector="Border.page-surface">
             <Setter Property="BoxShadow" Value="0 4 22 0 #14000000" />
@@ -225,7 +228,6 @@
                       CornerRadius="24" BorderBrush="#DDE2EC" BorderThickness="1"
                       IsVisible="{Binding IsLoaded}"
                       IsChecked="{Binding IsTableOfContentsOpen}"
-                      IsEnabled="{Binding HasTableOfContents}"
                       ToolTip.Tip="目录">
             <i:Icon Value="fa-solid fa-list-ul" FontSize="14"
                     Foreground="{Binding $parent[ToggleButton].Foreground}" />

@@ -322,7 +322,7 @@ public sealed class PdfTableOfContentsTests
     }
 
     [AvaloniaFact]
-    public async Task DocumentWithoutBookmarksDisablesTableOfContentsButton()
+    public async Task DocumentWithoutBookmarksOpensEmptyTableOfContents()
     {
         using var service = new FakePdfDocumentService(1);
         using var document = new DocumentTabViewModel("unused.pdf", service);
@@ -337,14 +337,29 @@ public sealed class PdfTableOfContentsTests
 
             ToggleButton button = Named<ToggleButton>(view, "TableOfContentsButton");
             Assert.False(document.HasTableOfContents);
-            Assert.False(button.IsEnabled);
+            Assert.True(button.IsEnabled);
+            var icon = Assert.IsAssignableFrom<Optris.Icons.Avalonia.Icon>(button.Content);
             Assert.Equal(
-                Color.Parse("#C4C8D2"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(button.Foreground).Color);
+                Color.Parse("#666D80"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
             Assert.Equal(
-                Colors.Transparent,
+                Colors.White,
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
-            Assert.False(view.IsTableOfContentsVisible);
+
+            Click(window, button);
+            window.UpdateLayout();
+
+            Assert.True(document.IsTableOfContentsOpen);
+            Assert.True(button.IsChecked);
+            Assert.True(view.IsTableOfContentsVisible);
+            Grid flyout = Named<Grid>(view, "TableOfContentsOverlay");
+            Assert.Contains("open", flyout.Classes);
+            ItemsControl items = Named<ItemsControl>(view, "TocItems");
+            Assert.Empty(items.Items);
+            Assert.Empty(document.VisibleTocEntries);
+            Assert.DoesNotContain(
+                view.GetVisualDescendants().OfType<Button>(),
+                item => item.Name == "TocNavigateButton");
         }
         finally
         {

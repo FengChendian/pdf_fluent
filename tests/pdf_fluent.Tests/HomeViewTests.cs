@@ -107,7 +107,11 @@ public sealed class HomeViewTests
     [AvaloniaFact]
     public async Task RecentDocumentContextMenuOpensWithoutSelectingTheFirstItem()
     {
-        using var viewModel = new MainViewModel();
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        using var viewModel = new MainViewModel(
+            new Services.PDFiumService(),
+            new Services.RecentDocumentsService(Path.Combine(directory, "recent.json")),
+            new Services.FavoriteDocumentsService(Path.Combine(directory, "favorites.json")));
         var recent = new RecentDocumentViewModel(new RecentDocument
         {
             FilePath = "document.pdf",
@@ -149,6 +153,7 @@ public sealed class HomeViewTests
             menu?.Close();
             recent.Dispose();
             window.Close();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
     }
 }
