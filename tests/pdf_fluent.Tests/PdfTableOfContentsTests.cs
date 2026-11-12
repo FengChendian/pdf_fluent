@@ -90,17 +90,21 @@ public sealed class PdfTableOfContentsTests
 
             window.MouseMove(Center(button, window));
             Assert.Equal(
-                Colors.White,
+                Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
             ContentPresenter hoverSurface = button.GetVisualChildren()
                 .OfType<ContentPresenter>()
                 .Single();
             Assert.Equal(
-                Colors.White,
+                Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(hoverSurface.Background).Color);
+            Assert.Equal(
+                Color.Parse("#DDE2EC"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(hoverSurface.BorderBrush).Color);
+            Assert.Equal(new Thickness(1), hoverSurface.BorderThickness);
             var hoverIcon = Assert.IsAssignableFrom<Optris.Icons.Avalonia.Icon>(button.Content);
             Assert.Equal(
-                Color.Parse("#6C5CE7"),
+                Color.Parse("#666D80"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(hoverIcon.Foreground).Color);
 
             Click(window, button);
@@ -111,14 +115,18 @@ public sealed class PdfTableOfContentsTests
             Assert.True(view.IsTableOfContentsVisible);
             Assert.Contains("open", flyout.Classes);
             Assert.Equal(
-                Colors.White,
+                Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
             ContentPresenter buttonSurface = button.GetVisualChildren()
                 .OfType<ContentPresenter>()
                 .Single();
             Assert.Equal(
-                Colors.White,
+                Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.Background).Color);
+            Assert.Equal(
+                Color.Parse("#DDE2EC"),
+                Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.BorderBrush).Color);
+            Assert.Equal(new Thickness(1), buttonSurface.BorderThickness);
             Assert.Equal(
                 Color.Parse("#6C5CE7"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Foreground).Color);
@@ -126,6 +134,14 @@ public sealed class PdfTableOfContentsTests
             Assert.Equal(
                 Color.Parse("#6C5CE7"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+
+            window.MouseMove(new Point(500, 500));
+            Assert.Equal(
+                Colors.White,
+                Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
+            Assert.Equal(
+                Colors.White,
+                Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.Background).Color);
 
             await Task.Delay(240);
             window.UpdateLayout();
@@ -172,6 +188,7 @@ public sealed class PdfTableOfContentsTests
             window.UpdateLayout();
 
             Assert.False(view.IsTableOfContentsVisible);
+            window.MouseMove(new Point(500, 500));
             Assert.Equal(
                 Colors.White,
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);

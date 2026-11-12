@@ -50,12 +50,14 @@ public partial class PdfDocumentView : UserControl
             },
         ];
         AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, OnPageJumpPointerPressed, RoutingStrategies.Tunnel);
     }
 
     internal PdfZoomController? ZoomController => _zoomController;
     internal TimeSpan PageIndicatorAutoHideDelay { get; set; } = TimeSpan.FromMilliseconds(800);
     internal bool IsPageIndicatorVisible => PageIndicatorOverlay.IsVisible;
     internal bool IsTableOfContentsVisible => TableOfContentsOverlay.IsVisible;
+    internal bool IsPageJumpVisible => PageJumpOverlay.IsVisible;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -75,6 +77,7 @@ public partial class PdfDocumentView : UserControl
         _scrollOffsetToRestore = document?.ScrollOffset;
         HidePageIndicator();
         CloseTableOfContentsImmediately();
+        ClosePageJump();
         AttachTextDocument(document);
         _lastObservedPageNumber = document?.CurrentPage ?? 1;
         _pendingPageIndex = null;
@@ -92,6 +95,7 @@ public partial class PdfDocumentView : UserControl
         DetachTextInteraction();
         HidePageIndicator();
         CloseTableOfContentsImmediately();
+        ClosePageJump();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);
     }
@@ -219,8 +223,15 @@ public partial class PdfDocumentView : UserControl
     private void ScrollToRelativePage(int delta)
     {
         if (DataContext is not DocumentTabViewModel document || document.PageCount == 0) return;
+        ClosePageJump();
         int currentIndex = _pendingPageIndex ?? document.CurrentPage - 1;
         int targetIndex = Math.Clamp(currentIndex + delta, 0, document.PageCount - 1);
+        ScrollToPage(targetIndex);
+    }
+
+    private void ScrollToPage(int targetIndex)
+    {
+        if (DataContext is not DocumentTabViewModel document) return;
         _pendingPageIndex = targetIndex;
         PageItems.ScrollIntoView(targetIndex);
         document.CurrentPage = targetIndex + 1;
@@ -235,9 +246,84 @@ public partial class PdfDocumentView : UserControl
             return;
         }
 
-        _pendingPageIndex = entry.PageIndex;
-        PageItems.ScrollIntoView(entry.PageIndex);
-        document.CurrentPage = entry.PageIndex + 1;
+        ScrollToPage(entry.PageIndex);
+    }
+
+    private void OnPageJumpButtonToggled(object? sender, RoutedEventArgs e)
+    {
+        if (PageJumpButton.IsChecked != true)
+        {
+            PageJumpOverlay.IsVisible = false;
+            return;
+        }
+
+        if (DataContext is not DocumentTabViewModel { PageCount: > 0 } document)
+        {
+            ClosePageJump();
+            return;
+        }
+
+        CloseTableOfContentsImmediately();
+        PageJumpTextBox.Text = document.CurrentPage.ToString();
+        PageJumpError.IsVisible = false;
+        PageJumpOverlay.IsVisible = true;
+        PageJumpTextBox.Focus();
+        PageJumpTextBox.SelectAll();
+    }
+
+    private void OnPageJumpTextChanged(object? sender, TextChangedEventArgs e) =>
+        PageJumpError.IsVisible = false;
+
+    private void OnPageJumpTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            NavigateToEnteredPage();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ClosePageJump();
+            PageJumpButton.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void OnGoToPageClick(object? sender, RoutedEventArgs e) => NavigateToEnteredPage();
+
+    private void NavigateToEnteredPage()
+    {
+        if (DataContext is not DocumentTabViewModel document || document.PageCount == 0) return;
+        if (!int.TryParse(PageJumpTextBox.Text, out int pageNumber) ||
+            pageNumber < 1 || pageNumber > document.PageCount)
+        {
+            PageJumpError.Text = $"请输入 1 到 {document.PageCount} 之间的页码";
+            PageJumpError.IsVisible = true;
+            PageJumpTextBox.Focus();
+            PageJumpTextBox.SelectAll();
+            return;
+        }
+
+        ClosePageJump();
+        ScrollToPage(pageNumber - 1);
+        DocumentScroller.Focus();
+    }
+
+    private void OnPageJumpPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!PageJumpOverlay.IsVisible || e.Source is not Visual source) return;
+        if (IsWithin(source, PageJumpOverlay) || IsWithin(source, PageNavigation)) return;
+        ClosePageJump();
+    }
+
+    private static bool IsWithin(Visual source, Visual ancestor) =>
+        ReferenceEquals(source, ancestor) || source.GetVisualAncestors().Contains(ancestor);
+
+    private void ClosePageJump()
+    {
+        PageJumpButton.IsChecked = false;
+        PageJumpOverlay.IsVisible = false;
+        PageJumpError.IsVisible = false;
     }
 
     private void OnTableOfContentsButtonToggled(object? sender, RoutedEventArgs e)
@@ -247,6 +333,7 @@ public partial class PdfDocumentView : UserControl
 
         if (TableOfContentsButton.IsChecked == true)
         {
+            ClosePageJump();
             TableOfContentsOverlay.IsVisible = true;
             TableOfContentsOverlay.Classes.Add("open");
             return;

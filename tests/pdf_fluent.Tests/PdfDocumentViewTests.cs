@@ -554,4 +554,213 @@ public sealed class PdfDocumentViewTests
             window.Close();
         }
     }
+
+    [AvaloniaFact]
+    public async Task PageIndicatorTogglesJumpPanelWithoutInterferingWithArrowButtons()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var jumpButton = Named<Avalonia.Controls.Primitives.ToggleButton>(view, "PageJumpButton");
+            TextBlock indicator = Named<TextBlock>(view, "PageIndicatorText");
+            TextBox input = Named<TextBox>(view, "PageJumpTextBox");
+            Button next = Named<Button>(view, "NextPageButton");
+
+            Assert.False(view.IsPageJumpVisible);
+            Click(window, next);
+            window.UpdateLayout();
+            Assert.Equal(2, document.CurrentPage);
+            Assert.False(view.IsPageJumpVisible);
+            Assert.False(jumpButton.IsChecked);
+
+            Click(window, indicator);
+            window.UpdateLayout();
+            Assert.True(jumpButton.IsChecked);
+            Assert.True(view.IsPageJumpVisible);
+            Assert.Equal("2", input.Text);
+            Assert.True(input.IsKeyboardFocusWithin);
+
+            input.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Source = input,
+                Key = Key.Escape,
+            });
+            Assert.False(view.IsPageJumpVisible);
+            Assert.False(jumpButton.IsChecked);
+
+            Click(window, indicator);
+            Assert.True(view.IsPageJumpVisible);
+            window.MouseDown(new Point(500, 500), MouseButton.Left);
+            window.MouseUp(new Point(500, 500), MouseButton.Left);
+            Assert.False(view.IsPageJumpVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PageJumpNavigatesByButtonAndEnterAndKeepsInvalidInputOpen()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 4);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            TextBlock indicator = Named<TextBlock>(view, "PageIndicatorText");
+            TextBox input = Named<TextBox>(view, "PageJumpTextBox");
+            TextBlock error = Named<TextBlock>(view, "PageJumpError");
+
+            Click(window, indicator);
+            input.Text = "3";
+            Click(window, Named<Button>(view, "GoToPageButton"));
+            window.UpdateLayout();
+            Assert.Equal(3, document.CurrentPage);
+            Assert.False(view.IsPageJumpVisible);
+            Assert.True(view.DocumentScroller.Offset.Y > 0);
+
+            Click(window, indicator);
+            input.Text = "5";
+            input.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Source = input,
+                Key = Key.Enter,
+            });
+            Assert.Equal(3, document.CurrentPage);
+            Assert.True(view.IsPageJumpVisible);
+            Assert.True(error.IsVisible);
+            Assert.Equal("请输入 1 到 4 之间的页码", error.Text);
+
+            input.Text = "2";
+            input.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Source = input,
+                Key = Key.Enter,
+            });
+            window.UpdateLayout();
+            Assert.Equal(2, document.CurrentPage);
+            Assert.False(view.IsPageJumpVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PageJumpPanelUsesTheTocPointerCurveAndAlignsWithThePageIndicator()
+    {
+        using var service = new FakePdfDocumentService(pageCount: 3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            Click(window, Named<TextBlock>(view, "PageIndicatorText"));
+            window.UpdateLayout();
+
+            Grid overlay = Named<Grid>(view, "PageJumpOverlay");
+            Border navigation = Named<Border>(view, "PageNavigation");
+            Border panel = Named<Border>(view, "PageJumpPanel");
+            var pointer = Named<Avalonia.Controls.Shapes.Path>(view, "PageJumpPointer");
+            var pointerFill = Named<Avalonia.Controls.Shapes.Path>(view, "PageJumpPointerFill");
+            var tocPointer = Named<Avalonia.Controls.Shapes.Path>(view, "TableOfContentsPointer");
+            var tocPointerFill = Named<Avalonia.Controls.Shapes.Path>(view, "TableOfContentsPointerFill");
+            TextBlock indicator = Named<TextBlock>(view, "PageIndicatorText");
+            var jumpButton = Named<Avalonia.Controls.Primitives.ToggleButton>(view, "PageJumpButton");
+            TextBox input = Named<TextBox>(view, "PageJumpTextBox");
+            Button goToPage = Named<Button>(view, "GoToPageButton");
+            Border inputSurface = input.GetVisualDescendants().OfType<Border>().First();
+            TextBlock goToPageLabel = goToPage.GetVisualDescendants().OfType<TextBlock>()
+                .Single(text => text.Text == "跳转");
+            var jumpSurface = jumpButton.GetVisualChildren()
+                .OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single();
+            var inputRow = Assert.IsAssignableFrom<Control>(input.GetVisualParent());
+
+            Assert.Equal(navigation.Bounds.Width, overlay.Bounds.Width, precision: 1);
+            Assert.Equal(new Thickness(0, 66, 20, 0), overlay.Margin);
+            Assert.Equal(34, input.Bounds.Height);
+            Assert.Equal(input.Bounds.Height, goToPage.Bounds.Height);
+            Assert.Equal(new Thickness(1), inputSurface.BorderThickness);
+            Assert.Equal(
+                Avalonia.Media.Color.Parse("#DDE2EC"),
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(inputSurface.BorderBrush).Color);
+            Assert.Equal(Avalonia.Media.TextAlignment.Center, input.TextAlignment);
+            Assert.Equal(
+                Avalonia.Media.Color.Parse("#DCEBFF"),
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(input.SelectionBrush).Color);
+            Assert.Equal(
+                Avalonia.Media.Color.Parse("#365E91"),
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(input.SelectionForegroundBrush).Color);
+            Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, goToPage.HorizontalContentAlignment);
+            Assert.Equal(Center(goToPage, window).X, Center(goToPageLabel, window).X, precision: 1);
+            Assert.Equal(Center(panel, window).X, Center(inputRow, window).X, precision: 1);
+            double inputRowTop = inputRow.TranslatePoint(new Point(0, 0), panel)!.Value.Y;
+            double inputRowBottom = inputRow.TranslatePoint(new Point(0, inputRow.Bounds.Height), panel)!.Value.Y;
+            Assert.Equal(12, inputRowTop, precision: 1);
+            Assert.Equal(inputRowTop, panel.Bounds.Height - inputRowBottom, precision: 1);
+            Assert.Equal(new CornerRadius(24), jumpButton.CornerRadius);
+            Assert.Equal(new CornerRadius(24), jumpSurface.CornerRadius);
+            Assert.Equal(
+                Avalonia.Media.Color.Parse("#F0EDFF"),
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(jumpSurface.Background).Color);
+            Assert.Equal(new CornerRadius(12), panel.CornerRadius);
+            Assert.Equal(new Thickness(1), panel.BorderThickness);
+            Assert.Equal(
+                Avalonia.Media.Colors.White,
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(panel.Background).Color);
+            Assert.Equal(
+                Avalonia.Media.Colors.White,
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(pointerFill.Fill).Color);
+            Assert.Equal(tocPointer.Data?.ToString(), pointer.Data?.ToString());
+            Assert.Equal(tocPointerFill.Data?.ToString(), pointerFill.Data?.ToString());
+            Assert.NotNull(pointer.Data);
+            Assert.NotNull(pointerFill.Data);
+            Assert.Equal(Center(indicator, window).X, Center(pointer, window).X, precision: 1);
+
+            Point pointerStartInPanel = pointer.TranslatePoint(new Point(0, 8), panel)!.Value;
+            Assert.Equal(0, pointerStartInPanel.Y, precision: 1);
+            Assert.InRange(pointerStartInPanel.X, 0, panel.Bounds.Width - 20);
+            double pointerBottom = pointer.TranslatePoint(new Point(0, pointer.Bounds.Height), view)!.Value.Y;
+            double panelTop = panel.TranslatePoint(new Point(0, 0), view)!.Value.Y;
+            Assert.True(pointerBottom > panelTop);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static T Named<T>(Visual root, string name) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+
+    private static Point Center(Control control, Visual relativeTo) =>
+        control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), relativeTo)!.Value;
+
+    private static void Click(Window window, Control control)
+    {
+        Point center = Center(control, window);
+        window.MouseDown(center, MouseButton.Left);
+        window.MouseUp(center, MouseButton.Left);
+    }
 }
