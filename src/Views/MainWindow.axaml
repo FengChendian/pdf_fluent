@@ -9,7 +9,7 @@
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="pdf_fluent.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/logo.ico"
         Title="Fluent PDF"
         Width="1380" Height="860"
         MinWidth="1040" MinHeight="700"
