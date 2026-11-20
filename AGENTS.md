@@ -1,6 +1,7 @@
 # 开发约定
 
 - Python 脚本统一通过 `uv run python <script.py>` 启动，不要直接调用 `python` 或 `python3`。
+- 本地不要尝试使用 Inno Setup / ISCC 编译安装包，当前开发环境未安装 Inno Setup。
 - Avalonia 功能验证优先使用 Avalonia Headless 自动化测试，不要依赖桌面截图判断布局、滚动或虚拟化行为；截图仅用于人工视觉检查。
 - Avalonia Fluent 主题悬停时会直接修改按钮模板内部 `ContentPresenter` 的背景色；自定义悬停色不能只设置外层 `Button.Background`，还要覆盖 `Button:pointerover /template/ ContentPresenter#PART_ContentPresenter` 的 `Background`。Headless 测试也应检查模板实际绘制画刷，避免只验证按钮属性。
 

@@ -39,6 +39,7 @@ ChangesAssociations=yes
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src\Assets\pdf.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional tasks:"; Flags: unchecked
@@ -63,7 +64,7 @@ Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\SupportedTypes"
 Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
 Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document"; ValueType: string; ValueName: ""; ValueData: "{#AppName}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\DefaultIcon"; Flags: deletekey
+Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\Assets\pdf.ico"",0"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKLM; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "PDFFluent.Document"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Fluent PDF"; Flags: uninsdeletekey

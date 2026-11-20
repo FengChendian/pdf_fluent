@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">蓝紫渐变 PDF 文件图标</title>
+  <desc id="desc">透明背景的白色折角文件，搭配与 PDF 阅读器一致的蓝紫渐变标签和白色 PDF 字样。</desc>
+  <defs>
+    <linearGradient id="page" x1="76" y1="28" x2="190" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F3F6FF"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="151" y1="25" x2="194" y2="73" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2F5FF"/>
+      <stop offset="1" stop-color="#CBD6FA"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="216" y1="140" x2="40" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F6DF5"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <filter id="pageShadow" x="36" y="8" width="184" height="244" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#34468F" flood-opacity="0.18"/>
+    </filter>
+    <filter id="labelShadow" x="24" y="130" width="208" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#493BA8" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#pageShadow)">
+    <path d="M72 20H148L200 72V220C200 228.837 192.837 236 184 236H72C63.1634 236 56 228.837 56 220V36C56 27.1634 63.1634 20 72 20Z" fill="url(#page)" stroke="#D8E1F4" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M148 20L200 72H164C155.163 72 148 64.8366 148 56V20Z" fill="url(#fold)" stroke="#D8E1F4" stroke-width="2" stroke-linejoin="round"/>
+  </g>
+
+  <rect x="82" y="91" width="66" height="8" rx="4" fill="#DDE5F8"/>
+  <rect x="82" y="112" width="92" height="8" rx="4" fill="#E6EBF9"/>
+
+  <g filter="url(#labelShadow)">
+    <rect x="36" y="140" width="184" height="76" rx="20" fill="url(#brand)"/>
+    <rect x="37" y="141" width="182" height="74" rx="19" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="2"/>
+    <g fill="#FFFFFF" fill-rule="evenodd" transform="translate(78.73 150.96) scale(3) translate(-108.007 -104.82)">
+      <path d="M109.917 104.82C108.866 104.82 108.007 105.787 108.007 106.969V120.719C108.007 121.9 108.866 122.867 109.917 122.867C110.967 122.867 111.826 121.9 111.826 120.719V117.711H112.972C116.123 117.711 118.701 114.81 118.701 111.266C118.701 107.721 116.123 104.82 112.972 104.82H109.917ZM112.972 113.414H111.826V109.117H112.972C114.023 109.117 114.882 110.084 114.882 111.266C114.882 112.447 114.023 113.414 112.972 113.414Z"/>
+      <path d="M122.139 104.82C121.089 104.82 120.229 105.787 120.229 106.969V120.719C120.229 121.9 121.089 122.867 122.139 122.867H125.194C127.964 122.867 130.16 120.396 130.16 117.281V110.406C130.16 107.291 127.964 104.82 125.194 104.82H122.139ZM124.049 118.57V109.117H125.194C125.863 109.117 126.34 109.654 126.34 110.406V117.281C126.34 118.033 125.863 118.57 125.194 118.57H124.049Z"/>
+      <path d="M132.451 106.969V120.719C132.451 121.9 133.311 122.867 134.361 122.867C135.411 122.867 136.271 121.9 136.271 120.719V115.992H138.944C139.995 115.992 140.854 115.025 140.854 113.844C140.854 112.662 139.995 111.695 138.944 111.695H136.271V109.117H138.944C139.995 109.117 140.854 108.15 140.854 106.969C140.854 105.787 139.995 104.82 138.944 104.82H134.361C133.311 104.82 132.451 105.787 132.451 106.969Z"/>
+    </g>
+  </g>
+</svg>

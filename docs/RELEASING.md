@@ -160,7 +160,7 @@ $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 
 双击 PDF 时，Windows 将文件路径作为启动参数传给应用。首个实例打开参数中的全部 PDF 并忽略其他类型的参数；已经运行时，后续进程通过仅当前用户可访问的命名管道转发参数并退出，原窗口会激活并在同一个 `MainViewModel` 中新增标签。
 
-PDF 类型注册不设置 `DefaultIcon`，因此关联后的 PDF 文件使用 Windows 默认图标，而不是 Fluent PDF 应用图标。`Applications\pdf_fluent.exe` 的图标仍用于应用列表和“打开方式”。如果旧图标被缓存，重新登录或重启资源管理器后再检查。
+PDF 类型的 `DefaultIcon` 指向安装目录中的 `Assets\pdf.ico`，关联后的 PDF 文件使用独立的文档图标；应用、快捷方式和“打开方式”仍使用 `logo.ico`。`pdf.ico` 由 `src/Assets/pdf.svg` 生成，包含多种尺寸。如果旧图标被缓存，重新登录或重启资源管理器后再检查。
 
 ## 常见问题
 
