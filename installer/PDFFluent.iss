@@ -43,7 +43,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignorevers
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional tasks:"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create Start Menu shortcuts"; GroupDescription: "Additional tasks:"
-Name: "associatepdf"; Description: "Associate PDF files with Fluent PDF"; GroupDescription: "Additional tasks:"; Flags: unchecked
+Name: "associatepdf"; Description: "Open Default Apps settings to associate PDF files with Fluent PDF"; GroupDescription: "Additional tasks:"; Flags: unchecked
 
 [Icons]
 Name: "{autodesktop}\Fluent PDF"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
@@ -63,14 +63,14 @@ Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\SupportedTypes"
 Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
 Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document"; ValueType: string; ValueName: ""; ValueData: "{#AppName}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
+Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\DefaultIcon"; Flags: deletekey
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKLM; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "PDFFluent.Document"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Fluent PDF"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "A PDF reader"
 Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "PDFFluent.Document"
 Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "Fluent PDF"; ValueData: "Software\Fluent PDF\Capabilities"
-Root: HKLM; Subkey: "Software\Classes\.pdf"; ValueType: string; ValueName: ""; ValueData: "PDFFluent.Document"; Flags: uninsdeletevalue; Tasks: associatepdf
 
 [Run]
+Filename: "ms-settings:defaultapps"; Description: "Choose Fluent PDF as the default PDF application"; Flags: shellexec nowait postinstall skipifsilent; Tasks: associatepdf
 Filename: "{app}\{#AppExeName}"; Description: "Launch Fluent PDF"; Flags: nowait postinstall skipifsilent unchecked

@@ -1,6 +1,7 @@
 using Avalonia;
 using Optris.Icons.Avalonia;
 using Optris.Icons.Avalonia.FontAwesome;
+using pdf_fluent.Services;
 using System;
 
 namespace pdf_fluent;
@@ -11,8 +12,24 @@ sealed class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    public static void Main(string[] args)
+    {
+        using var coordinator = new SingleInstanceCoordinator();
+        if (!coordinator.IsPrimary && coordinator.TrySendAsync(args).GetAwaiter().GetResult())
+            return;
+
+        SingleInstance = coordinator.IsPrimary ? coordinator : null;
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        finally
+        {
+            SingleInstance = null;
+        }
+    }
+
+    internal static SingleInstanceCoordinator? SingleInstance { get; private set; }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()

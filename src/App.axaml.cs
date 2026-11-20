@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 
@@ -22,10 +24,37 @@ public partial class App : Application
             {
                 DataContext = viewModel,
             };
-            _ = OpenStartupDocumentsAsync(viewModel, desktop.Args);
+            var openDocumentLock = new SemaphoreSlim(1, 1);
+            _ = OpenDocumentsAsync(desktop.Args);
+            Program.SingleInstance?.StartListening(args => Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                ActivateMainWindow(desktop.MainWindow);
+                await OpenDocumentsAsync(args);
+            }));
+
+            async Task OpenDocumentsAsync(string[]? args)
+            {
+                await openDocumentLock.WaitAsync();
+                try
+                {
+                    await OpenStartupDocumentsAsync(viewModel, args);
+                }
+                finally
+                {
+                    openDocumentLock.Release();
+                }
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void ActivateMainWindow(Window? window)
+    {
+        if (window is null) return;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Show();
+        window.Activate();
     }
 
     internal static async Task OpenStartupDocumentsAsync(MainViewModel viewModel, string[]? args)
