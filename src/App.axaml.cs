@@ -24,6 +24,7 @@ public partial class App : Application
             {
                 DataContext = viewModel,
             };
+            _ = viewModel.CheckForUpdatesOnStartupAsync();
             var openDocumentLock = new SemaphoreSlim(1, 1);
             _ = OpenDocumentsAsync(desktop.Args);
             Program.SingleInstance?.StartListening(args => Dispatcher.UIThread.InvokeAsync(async () =>

@@ -189,7 +189,7 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
-    public void DisabledSettingsButtonUsesLightGrayIconWithoutADisabledBackground()
+    public void SettingsNavigationOpensTheDedicatedPageAndReturnsHome()
     {
         using var viewModel = new MainViewModel();
         var window = new MainWindow { DataContext = viewModel };
@@ -199,28 +199,27 @@ public sealed class MainWindowTests
             window.UpdateLayout();
 
             Button settings = window.GetVisualDescendants().OfType<Button>()
-                .Single(button => button.Classes.Contains("nav-button") && !button.IsEnabled);
-            Assert.Equal(1, settings.Opacity);
-            Assert.Equal(
-                Color.Parse("#C4C8D2"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(settings.Foreground).Color);
-            Assert.Equal(
-                Colors.Transparent,
-                Assert.IsAssignableFrom<ISolidColorBrush>(settings.Background).Color);
-            var icon = Assert.IsAssignableFrom<Optris.Icons.Avalonia.Icon>(settings.Content);
-            Assert.Equal(
-                Color.Parse("#C4C8D2"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                .Single(button => button.Name == "SettingsNavButton");
+            settings.Command!.Execute(null);
+            window.UpdateLayout();
 
-            Point center = settings.TranslatePoint(
-                new Point(settings.Bounds.Width / 2, settings.Bounds.Height / 2), window)!.Value;
-            window.MouseMove(center);
-            Avalonia.Controls.Presenters.ContentPresenter surface = settings.GetVisualChildren()
-                .OfType<Avalonia.Controls.Presenters.ContentPresenter>()
-                .Single();
-            Assert.Equal(
-                Colors.Transparent,
-                Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color);
+            Assert.True(viewModel.IsSettingsSelected);
+            Assert.True(viewModel.IsSettingsOpen);
+            Assert.False(viewModel.IsLibraryOpen);
+            Assert.True(Assert.IsType<Avalonia.Controls.Primitives.ToggleButton>(settings).IsChecked);
+            Assert.Contains("selected", settings.Classes);
+            Assert.Single(window.GetVisualDescendants().OfType<SettingsView>(), view => view.IsVisible);
+            Assert.True(window.GetVisualDescendants().OfType<Border>()
+                .Single(border => border.Name == "SettingsSelectionIndicator").IsVisible);
+            Assert.True(window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Name == "SettingsTopTab").IsVisible);
+            Assert.False(window.GetVisualDescendants().OfType<HomeView>().Single().IsVisible);
+
+            viewModel.ShowHomeCommand.Execute(null);
+            window.UpdateLayout();
+            Assert.False(viewModel.IsSettingsSelected);
+            Assert.True(viewModel.IsHomeSelected);
+            Assert.False(Assert.IsType<Avalonia.Controls.Primitives.ToggleButton>(settings).IsChecked);
         }
         finally
         {

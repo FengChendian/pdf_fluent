@@ -211,10 +211,18 @@
                     <Border Width="24" Height="1" Background="#ECEEF3" HorizontalAlignment="Center" Margin="0,2,0,0" />
                 </StackPanel>
 
-                <Button Grid.Row="2" Classes="nav-button" IsEnabled="False" ToolTip.Tip="设置（即将推出）">
-                    <i:Icon Value="fa-solid fa-gear" FontSize="16"
-                            Foreground="{Binding $parent[Button].Foreground}" />
-                </Button>
+                <Grid Grid.Row="2" Height="44">
+                    <Border x:Name="SettingsSelectionIndicator" Width="3" Height="22" CornerRadius="1.5"
+                            Background="#6C5CE7" HorizontalAlignment="Left" Margin="6.5,0,6.5,0"
+                            VerticalAlignment="Center" IsVisible="{Binding IsSettingsSelected}" />
+                    <ToggleButton x:Name="SettingsNavButton" Classes="nav-button"
+                                  Classes.selected="{Binding IsSettingsSelected}"
+                                  Command="{Binding ShowSettingsCommand}"
+                                  IsChecked="{Binding IsSettingsSelected, Mode=OneWay}" ToolTip.Tip="设置">
+                        <i:Icon Value="fa-solid fa-gear" FontSize="16"
+                                Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                    </ToggleButton>
+                </Grid>
             </Grid>
         </Border>
 
@@ -227,6 +235,17 @@
                         <i:Icon Value="fa-solid fa-house" FontSize="13"
                                 Foreground="{Binding $parent[ToggleButton].Foreground}" />
                         <TextBlock Text="主页" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="SettingsTopTab" Classes="top-tab"
+                              Classes.selected="{Binding IsSettingsSelected}"
+                              Command="{Binding ShowSettingsCommand}"
+                              IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                              IsVisible="{Binding IsSettingsOpen}">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <i:Icon Value="fa-solid fa-gear" FontSize="13"
+                                Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                        <TextBlock Text="设置" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
                     </StackPanel>
                 </ToggleButton>
                 <Button Grid.Column="1" Classes="plain-button" Width="34" Height="34" Margin="4,0,4,0"
@@ -308,6 +327,7 @@
 
         <Grid Grid.Row="1" Grid.Column="1">
             <views:HomeView IsVisible="{Binding IsLibraryOpen}" />
+            <views:SettingsView IsVisible="{Binding IsSettingsOpen}" />
             <ContentControl Content="{Binding SelectedDocument}" IsVisible="{Binding IsDocumentOpen}">
                 <ContentControl.DataTemplates>
                     <DataTemplate DataType="vm:DocumentTabViewModel">

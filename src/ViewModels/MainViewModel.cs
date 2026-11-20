@@ -30,11 +30,15 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         PDFiumService pdfService,
         RecentDocumentsService recentService,
         FavoriteDocumentsService favoriteService,
-        TimeSpan? statusMessageDuration = null)
+        TimeSpan? statusMessageDuration = null,
+        IUpdateCheckService? updateCheckService = null)
     {
         _pdfService = pdfService;
         _recentService = recentService;
         _favoriteService = favoriteService;
+        Settings = updateCheckService is null
+            ? new SettingsViewModel()
+            : new SettingsViewModel(updateCheckService, ApplicationVersion.Current);
         _statusMessageTimer = new DispatcherTimer
         {
             Interval = statusMessageDuration ?? StatusMessageDuration,
@@ -62,8 +66,10 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<RecentDocumentViewModel> RecentDocuments { get; } = [];
     public ObservableCollection<RecentDocumentViewModel> VisibleRecentDocuments { get; } = [];
     public ObservableCollection<RecentDocumentViewModel> FavoriteDocuments { get; } = [];
-    public bool IsLibraryOpen => SelectedDocument is null;
+    public SettingsViewModel Settings { get; }
+    public bool IsLibraryOpen => SelectedDocument is null && !IsSettingsSelected;
     public bool IsHomeSelected => IsLibraryOpen && !IsFavoritesSelected;
+    public bool IsSettingsOpen => SelectedDocument is null && IsSettingsSelected;
     public bool IsDocumentOpen => SelectedDocument is not null;
     public bool HasRecentDocuments => RecentDocuments.Count > 0;
     public bool HasNoRecentDocuments => RecentDocuments.Count == 0;
@@ -81,6 +87,9 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     private bool _isFavoritesSelected;
 
     [ObservableProperty]
+    private bool _isSettingsSelected;
+
+    [ObservableProperty]
     private bool _isOpening;
 
     [ObservableProperty]
@@ -92,12 +101,24 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     partial void OnSelectedDocumentChanged(DocumentTabViewModel? oldValue, DocumentTabViewModel? newValue)
     {
         if (oldValue is not null) SaveReadingPosition(oldValue);
-        if (newValue is not null) IsFavoritesSelected = false;
+        if (newValue is not null)
+        {
+            IsFavoritesSelected = false;
+            IsSettingsSelected = false;
+        }
         foreach (var document in OpenDocuments)
             document.IsSelected = ReferenceEquals(document, newValue);
         OnPropertyChanged(nameof(IsLibraryOpen));
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsDocumentOpen));
+        OnPropertyChanged(nameof(IsSettingsOpen));
+    }
+
+    partial void OnIsSettingsSelectedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsLibraryOpen));
+        OnPropertyChanged(nameof(IsHomeSelected));
+        OnPropertyChanged(nameof(IsSettingsOpen));
     }
 
     partial void OnIsFavoritesSelectedChanged(bool value)
@@ -124,16 +145,28 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     private void ShowHome()
     {
         IsFavoritesSelected = false;
+        IsSettingsSelected = false;
         SelectedDocument = null;
     }
 
     [RelayCommand]
     private void ShowFavorites()
     {
+        IsSettingsSelected = false;
         SelectedDocument = null;
         IsFavoritesSelected = true;
         MarkFavoritesAsRead();
     }
+
+    [RelayCommand]
+    private void ShowSettings()
+    {
+        IsFavoritesSelected = false;
+        SelectedDocument = null;
+        IsSettingsSelected = true;
+    }
+
+    public Task CheckForUpdatesOnStartupAsync() => Settings.CheckForUpdatesOnStartupAsync();
 
     private void MarkFavoritesAsRead()
     {
@@ -428,6 +461,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         RecentDocuments.Clear();
         VisibleRecentDocuments.Clear();
         FavoriteDocuments.Clear();
+        Settings.Dispose();
         _pdfService.Dispose();
     }
 }
