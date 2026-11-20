@@ -265,4 +265,39 @@ public sealed class MainViewModelLibraryTests
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
     }
+
+    [AvaloniaFact]
+    public async Task FavoriteRemovalStatusMessageDisappearsAutomatically()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        string recentPath = Path.Combine(directory, "recent.json");
+        string favoritesPath = Path.Combine(directory, "favorites.json");
+        try
+        {
+            new FavoriteDocumentsService(favoritesPath).Save([
+                new RecentDocument
+                {
+                    FilePath = "favorite.pdf",
+                    PageCount = 3,
+                    LastOpened = DateTimeOffset.Now,
+                },
+            ]);
+            using var viewModel = new MainViewModel(
+                new PDFiumService(),
+                new RecentDocumentsService(recentPath),
+                new FavoriteDocumentsService(favoritesPath),
+                TimeSpan.FromMilliseconds(30));
+            var favorite = Assert.Single(viewModel.FavoriteDocuments);
+
+            viewModel.RemoveFavoriteDocumentCommand.Execute(favorite);
+
+            Assert.Equal("已从收藏夹移除：favorite", viewModel.StatusMessage);
+            await Task.Delay(150);
+            Assert.Null(viewModel.StatusMessage);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
 }

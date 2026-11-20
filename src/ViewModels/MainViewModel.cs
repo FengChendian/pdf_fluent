@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using pdf_fluent.Models;
@@ -10,10 +11,12 @@ namespace pdf_fluent.ViewModels;
 public sealed partial class MainViewModel : ViewModelBase, IDisposable
 {
     private const int MaxRecentDocuments = 12;
+    private static readonly TimeSpan StatusMessageDuration = TimeSpan.FromSeconds(3);
 
     private readonly PDFiumService _pdfService;
     private readonly RecentDocumentsService _recentService;
     private readonly FavoriteDocumentsService _favoriteService;
+    private readonly DispatcherTimer _statusMessageTimer;
     private bool _disposed;
 
     public MainViewModel() : this(
@@ -26,11 +29,17 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     internal MainViewModel(
         PDFiumService pdfService,
         RecentDocumentsService recentService,
-        FavoriteDocumentsService favoriteService)
+        FavoriteDocumentsService favoriteService,
+        TimeSpan? statusMessageDuration = null)
     {
         _pdfService = pdfService;
         _recentService = recentService;
         _favoriteService = favoriteService;
+        _statusMessageTimer = new DispatcherTimer
+        {
+            Interval = statusMessageDuration ?? StatusMessageDuration,
+        };
+        _statusMessageTimer.Tick += OnStatusMessageTimerTick;
 
         foreach (var document in _recentService.Load().OrderByDescending(d => d.LastOpened).Take(MaxRecentDocuments))
             RecentDocuments.Add(new RecentDocumentViewModel(document, RemoveRecentDocumentCommand));
@@ -102,6 +111,14 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         RefreshVisibleRecentDocuments();
         OnPropertyChanged(nameof(RecentEmptyMessage));
     }
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        _statusMessageTimer.Stop();
+        if (value is not null) _statusMessageTimer.Start();
+    }
+
+    private void OnStatusMessageTimerTick(object? sender, EventArgs e) => StatusMessage = null;
 
     [RelayCommand]
     private void ShowHome()
@@ -401,6 +418,8 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _statusMessageTimer.Stop();
+        _statusMessageTimer.Tick -= OnStatusMessageTimerTick;
         foreach (var document in OpenDocuments) SaveReadingPosition(document);
         foreach (var document in OpenDocuments) document.Dispose();
         foreach (var document in RecentDocuments) document.Dispose();
