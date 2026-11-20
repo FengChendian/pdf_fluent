@@ -145,16 +145,16 @@ $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 
 - **桌面快捷方式**：可选，默认不勾选。
 - **开始菜单快捷方式**：可选，默认勾选，同时包含卸载入口。
-- **PDF 文件关联**：可选，默认不勾选；勾选后在安装完成页提供“选择 Fluent PDF 作为默认 PDF 应用”操作，用于打开 Windows 默认应用设置。
+- **PDF 文件关联**：安装时自动完成，不提供勾选项，也不再打开 Windows 默认应用设置。
 - **安装完成后启动**：可选，默认不勾选。
 
 应用默认安装到 `Program Files\Fluent PDF`，因此安装和卸载需要管理员权限。
 
 ## PDF 文件关联说明
 
-安装程序会注册 Fluent PDF 的 `.pdf` 打开能力，使其出现在 Windows 的“打开方式”和默认应用列表中。勾选 PDF 关联任务后，安装完成页会默认勾选“选择 Fluent PDF 作为默认 PDF 应用”，确认完成时打开 `ms-settings:defaultapps`；用户在系统设置中选择 Fluent PDF 即可完成关联。
+安装程序会注册 Fluent PDF 的 `.pdf` 打开能力，并将 `.pdf` 的默认程序标识静默设置为 `PDFFluent.Document`，无需用户勾选或确认。`ChangesAssociations=yes` 会通知 Windows 刷新文件关联。
 
-安装程序不会直接覆盖 `.pdf` 的 `UserChoice`。Windows 10/11 会校验当前用户的默认应用选择，管理员权限也不能可靠地静默替代用户确认，直接写入或伪造该注册项可能失效或被系统重置。
+安装程序不会直接覆盖 `.pdf` 的 `UserChoice`。Windows 10/11 会校验当前用户的默认应用选择；如果用户此前已通过系统设置选择其他 PDF 应用，该用户级选择仍可能优先于安装程序写入的系统级关联。
 
 应用显示名称由程序集产品信息、`Applications\pdf_fluent.exe` 友好名称和默认应用注册共同提供，统一为 **Fluent PDF**。安装程序会清理旧版 `PDF Fluent` 的注册项和快捷方式；Windows 若仍缓存旧名称，重新登录或重启资源管理器后再检查。
 
