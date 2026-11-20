@@ -11,7 +11,6 @@ public sealed class PdfPageOverlay : Control
 {
     private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(76, 55, 116, 235));
     private static readonly IBrush SearchBrush = new SolidColorBrush(Color.FromArgb(88, 255, 193, 7));
-    private static readonly IPen SelectedHighlightPen = new Pen(new SolidColorBrush(Color.FromArgb(230, 108, 92, 231)), 1.5);
 
     public static readonly StyledProperty<PdfPageViewModel?> PageProperty =
         AvaloniaProperty.Register<PdfPageOverlay, PdfPageViewModel?>(nameof(Page));
@@ -20,7 +19,6 @@ public sealed class PdfPageOverlay : Control
         AvaloniaProperty.Register<PdfPageOverlay, DocumentTabViewModel?>(nameof(Document));
 
     private PdfPageViewModel? _subscribedPage;
-    private readonly Dictionary<Color, IBrush> _highlightBrushes = new();
 
     public PdfPageViewModel? Page
     {
@@ -45,17 +43,22 @@ public sealed class PdfPageOverlay : Control
         base.Render(context);
         if (Page?.Text is not { } text || Document is not { } document) return;
 
+        var highlights = new List<PdfHighlightDrawItem>();
         foreach (PdfHighlight highlight in document.GetHighlights(Page.PageIndex))
         {
-            if (!_highlightBrushes.TryGetValue(highlight.Color, out IBrush? brush))
-            {
-                brush = new SolidColorBrush(highlight.Color);
-                _highlightBrushes.Add(highlight.Color, brush);
-            }
-            IPen? pen = ReferenceEquals(document.SelectedHighlight, highlight) ? SelectedHighlightPen : null;
+            bool selected = ReferenceEquals(document.SelectedHighlight, highlight);
             foreach (PdfRect rect in highlight.Rects)
-                DrawRect(context, brush, rect, text.CropBox, document.HighlightCornerRadius, pen);
+            {
+                Rect bounds = GetLayoutBounds(rect);
+                highlights.Add(new PdfHighlightDrawItem(
+                    bounds,
+                    highlight.Color,
+                    GetCornerRadius(bounds, document.HighlightCornerRadius),
+                    selected));
+            }
         }
+        if (highlights.Count > 0)
+            context.Custom(new PdfHighlightDrawOperation(highlights, new Rect(Bounds.Size)));
 
         IBrush selectionBrush = document.ActiveSearchResult?.PageIndex == Page.PageIndex
             ? SearchBrush
@@ -84,11 +87,16 @@ public sealed class PdfPageOverlay : Control
         IPen? pen = null)
     {
         Rect bounds = GetLayoutBounds(rect);
+        double radius = GetCornerRadius(bounds, cornerRadius);
+        context.DrawRectangle(brush, pen, bounds, radius, radius);
+    }
+
+    private double GetCornerRadius(Rect bounds, double cornerRadius)
+    {
         double scale = DocumentTabViewModel.LayoutScale * Page!.Zoom;
-        double radius = Math.Min(
+        return Math.Min(
             Math.Min(bounds.Width, bounds.Height) / 2,
             Math.Max(0, cornerRadius * scale));
-        context.DrawRectangle(brush, pen, bounds, radius, radius);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

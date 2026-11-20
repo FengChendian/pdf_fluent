@@ -1,10 +1,11 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using pdf_fluent.Controls;
 using pdf_fluent.Models;
 using pdf_fluent.Services;
 using pdf_fluent.ViewModels;
+using SkiaSharp;
 using Xunit;
 
 namespace pdf_fluent.Tests;
@@ -47,6 +48,26 @@ public sealed class PdfHighlightEditingTests
             0,
             new Point(during.X + during.Width / 2, during.Y + during.Height / 2)));
         Assert.Equal(0, hit.CharacterIndex);
+    }
+
+    [Fact]
+    public void HighlightMultiplyKeepsBlackTextBlack()
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(20, 20));
+        surface.Canvas.Clear(SKColors.Black);
+        using var operation = new PdfHighlightDrawOperation(
+            [new PdfHighlightDrawItem(
+                new Rect(0, 0, 20, 20),
+                Color.FromArgb(96, 255, 235, 59),
+                1.5,
+                false)],
+            new Rect(0, 0, 20, 20));
+
+        operation.Render(surface.Canvas, 1);
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+        Assert.Equal(SKColors.Black, bitmap.GetPixel(10, 10));
     }
 
     [AvaloniaFact]

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text.Json;
+using Microsoft.Win32.SafeHandles;
 
 namespace pdf_fluent.Services;
 
@@ -49,6 +51,11 @@ internal sealed class SingleInstanceCoordinator : IDisposable
                 try
                 {
                     await client.ConnectAsync(200, timeout.Token);
+                    if (OperatingSystem.IsWindows() &&
+                        GetNamedPipeServerProcessId(client.SafePipeHandle, out uint primaryProcessId))
+                    {
+                        AllowSetForegroundWindow(primaryProcessId);
+                    }
                     byte[] payload = JsonSerializer.SerializeToUtf8Bytes(args);
                     await client.WriteAsync(payload, timeout.Token);
                     return true;
@@ -123,4 +130,10 @@ internal sealed class SingleInstanceCoordinator : IDisposable
         _shutdown.Dispose();
         _instanceSemaphore.Dispose();
     }
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle hNamedPipe, out uint serverProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(uint dwProcessId);
 }

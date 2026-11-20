@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using System.Runtime.InteropServices;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 
@@ -55,6 +56,8 @@ public partial class App : Application
         if (window is null) return;
         if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
         window.Show();
+        if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is nint handle && handle != 0)
+            SetWindowPos(handle, 0, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
         window.Activate();
     }
 
@@ -66,4 +69,18 @@ public partial class App : Application
         foreach (string filePath in filePaths)
             await viewModel.OpenDocumentAsync(filePath);
     }
+
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(
+        nint hWnd,
+        nint hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint flags);
 }

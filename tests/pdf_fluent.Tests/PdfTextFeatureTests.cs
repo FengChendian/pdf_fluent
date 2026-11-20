@@ -122,6 +122,9 @@ public sealed class PdfTextFeatureTests
                 Assert.False(document.HasUnsavedHighlights);
             }
 
+            string pdf = System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(filePath));
+            Assert.Matches(@"/BM\s*/Multiply", pdf);
+
             using var reader = new PDFiumService();
             List<PdfHighlight> saved = reader.LoadHighlights(filePath);
             Assert.Equal(originalHighlights.Count + 1, saved.Count);
