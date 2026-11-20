@@ -1,6 +1,6 @@
 # Windows 发布流程
 
-本文档说明如何为 PDF Fluent 构建并发布自包含的 Windows x64 安装包。目前只维护 `win-x64` 发布，不生成其他平台的安装包。
+本文档说明如何为 Fluent PDF 构建并发布自包含的 Windows x64 安装包。目前只维护 `win-x64` 发布，不生成其他平台的安装包。
 
 ## 发布组成
 
@@ -69,19 +69,19 @@ git push origin master
 ### 3. 创建并推送发布标签
 
 ```bash
-git tag -a v0.2.0 -m "PDF Fluent v0.2.0"
+git tag -a v0.2.0 -m "Fluent PDF v0.2.0"
 git push origin v0.2.0
 ```
 
-推送标签后，在 GitHub 仓库的 **Actions** 页面查看 `Release PDF Fluent for Windows x64` 工作流。
+推送标签后，在 GitHub 仓库的 **Actions** 页面查看 `Release Fluent PDF for Windows x64` 工作流。
 
 ### 4. 检查发布结果
 
 工作流成功后应得到：
 
-- GitHub Release：`PDF Fluent v0.2.0`
-- 安装包：`PDF Fluent Setup 0.2.0 win-x64.exe`
-- Actions 构建产物：`PDF-Fluent-0.2.0-win-x64`，保留 30 天
+- GitHub Release：`Fluent PDF v0.2.0`
+- 安装包：`Fluent PDF Setup 0.2.0 win-x64.exe`
+- Actions 构建产物：`Fluent-PDF-0.2.0-win-x64`，保留 30 天
 
 发布前建议下载 Release 中的安装包，在干净的 Windows x64 环境验证安装、启动、PDF 打开和卸载。安装包已包含 .NET 运行时，目标机器不需要另外安装 .NET SDK 或运行时。
 
@@ -141,18 +141,20 @@ $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 
 ## 安装选项
 
-安装程序名称为 **PDF Fluent**，提供以下选项：
+安装程序名称为 **Fluent PDF**，提供以下选项：
 
 - **桌面快捷方式**：可选，默认不勾选。
 - **开始菜单快捷方式**：可选，默认勾选，同时包含卸载入口。
 - **PDF 文件关联**：可选，默认不勾选。
 - **安装完成后启动**：可选，默认不勾选。
 
-应用默认安装到 `Program Files\PDF Fluent`，因此安装和卸载需要管理员权限。
+应用默认安装到 `Program Files\Fluent PDF`，因此安装和卸载需要管理员权限。
 
 ## PDF 文件关联说明
 
-安装程序会注册 PDF Fluent 的 `.pdf` 打开能力，使其可以出现在 Windows 的“打开方式”和默认应用列表中。只有用户勾选 PDF 关联任务时，才会尝试将 `.pdf` 的默认 ProgID 设置为 PDF Fluent。
+安装程序会注册 Fluent PDF 的 `.pdf` 打开能力，使其可以出现在 Windows 的“打开方式”和默认应用列表中。只有用户勾选 PDF 关联任务时，才会尝试将 `.pdf` 的默认 ProgID 设置为 Fluent PDF。双击 PDF 时，Windows 将文件路径作为启动参数传给应用，应用启动后会打开参数中的全部 PDF 文件并忽略其他类型的参数。
+
+应用显示名称由程序集产品信息、`Applications\pdf_fluent.exe` 友好名称和默认应用注册共同提供，统一为 **Fluent PDF**。安装程序会清理旧版 `PDF Fluent` 的注册项和快捷方式；Windows 若仍缓存旧名称，重新登录或重启资源管理器后再检查。
 
 Windows 10/11 可能通过用户的 `UserChoice` 保留原来的默认 PDF 应用，因此无法保证安装程序在所有系统上静默更改默认应用。用户可能仍需在 Windows“默认应用”设置中确认。
 

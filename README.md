@@ -1,6 +1,6 @@
-# PDF Fluent
+# Fluent PDF
 
-PDF Fluent 是一款基于 Avalonia 和 PDFium 的桌面 PDF 阅读器，采用 Fluent 设计风格。项目目前提供 Windows x64 自包含安装包。
+Fluent PDF 是一款基于 Avalonia 和 PDFium 的桌面 PDF 阅读器，采用 Fluent 设计风格。项目目前提供 Windows x64 自包含安装包。
 
 ## 主要功能
 

@@ -17,12 +17,23 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var viewModel = new MainViewModel();
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel(),
+                DataContext = viewModel,
             };
+            _ = OpenStartupDocumentsAsync(viewModel, desktop.Args);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    internal static async Task OpenStartupDocumentsAsync(MainViewModel viewModel, string[]? args)
+    {
+        string[] filePaths = (args ?? [])
+            .Where(path => string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        foreach (string filePath in filePaths)
+            await viewModel.OpenDocumentAsync(filePath);
     }
 }

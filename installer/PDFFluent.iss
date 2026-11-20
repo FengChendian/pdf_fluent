@@ -1,4 +1,4 @@
-#define AppName "PDF Fluent"
+#define AppName "Fluent PDF"
 #define AppExeName "pdf_fluent.exe"
 
 #ifndef AppVersion
@@ -18,12 +18,13 @@ AppId={{C5925B07-56D3-41C5-B506-DE3F00F7CC02}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=PDF Fluent
-DefaultDirName={autopf}\PDF Fluent
-DefaultGroupName=PDF Fluent
+AppPublisher=Fluent PDF
+DefaultDirName={autopf}\Fluent PDF
+DefaultGroupName=Fluent PDF
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=PDF Fluent Setup {#AppVersion} win-x64
+OutputBaseFilename=Fluent PDF Setup {#AppVersion} win-x64
 SetupIconFile=..\src\Assets\logo.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 PrivilegesRequired=admin
@@ -42,23 +43,34 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignorevers
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional tasks:"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create Start Menu shortcuts"; GroupDescription: "Additional tasks:"
-Name: "associatepdf"; Description: "Associate PDF files with PDF Fluent"; GroupDescription: "Additional tasks:"; Flags: unchecked
+Name: "associatepdf"; Description: "Associate PDF files with Fluent PDF"; GroupDescription: "Additional tasks:"; Flags: unchecked
 
 [Icons]
-Name: "{autodesktop}\PDF Fluent"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
-Name: "{group}\PDF Fluent"; Filename: "{app}\{#AppExeName}"; Tasks: startmenuicon
-Name: "{group}\Uninstall PDF Fluent"; Filename: "{uninstallexe}"; Tasks: startmenuicon
+Name: "{autodesktop}\Fluent PDF"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{group}\Fluent PDF"; Filename: "{app}\{#AppExeName}"; Tasks: startmenuicon
+Name: "{group}\Uninstall Fluent PDF"; Filename: "{uninstallexe}"; Tasks: startmenuicon
+
+[InstallDelete]
+Type: files; Name: "{autodesktop}\PDF Fluent.lnk"
+Type: filesandordirs; Name: "{commonstartmenu}\Programs\PDF Fluent"
 
 [Registry]
-Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document"; ValueType: string; ValueName: ""; ValueData: "PDF Document"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\PDF Fluent"; Flags: deletekey
+Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueName: "PDF Fluent"; Flags: deletevalue
+Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
+Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
+Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
+Root: HKLM; Subkey: "Software\Classes\Applications\{#AppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
+Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document"; ValueType: string; ValueName: ""; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
 Root: HKLM; Subkey: "Software\Classes\PDFFluent.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKLM; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "PDFFluent.Document"; ValueData: ""; Flags: uninsdeletevalue
-Root: HKLM; Subkey: "Software\PDF Fluent\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "PDF Fluent"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\PDF Fluent\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "A PDF reader"
-Root: HKLM; Subkey: "Software\PDF Fluent\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "PDFFluent.Document"
-Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "PDF Fluent"; ValueData: "Software\PDF Fluent\Capabilities"
+Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Fluent PDF"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "A PDF reader"
+Root: HKLM; Subkey: "Software\Fluent PDF\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "PDFFluent.Document"
+Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "Fluent PDF"; ValueData: "Software\Fluent PDF\Capabilities"
 Root: HKLM; Subkey: "Software\Classes\.pdf"; ValueType: string; ValueName: ""; ValueData: "PDFFluent.Document"; Flags: uninsdeletevalue; Tasks: associatepdf
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch PDF Fluent"; Flags: nowait postinstall skipifsilent unchecked
+Filename: "{app}\{#AppExeName}"; Description: "Launch Fluent PDF"; Flags: nowait postinstall skipifsilent unchecked
