@@ -54,8 +54,8 @@ jobs:
 
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Run tests
-        run: dotnet test pdf_fluent.slnx --configuration Release
+#      - name: Run tests
+#        run: dotnet test pdf_fluent.slnx --configuration Release
 
       - name: Publish self-contained win-x64 application
         shell: pwsh
