@@ -18,6 +18,340 @@ namespace pdf_fluent.Tests;
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
+    public void NewPdfButtonFollowsTabsWithSymmetricSpacingAndAVisibleTemplateHover()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var window = new MainWindow { DataContext = vm };
+        try
+        {
+            void Layout()
+            {
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+            }
+            double Left(Control control) => control.TranslatePoint(default, window)!.Value.X;
+            double Right(Control control) => Left(control) + control.Bounds.Width;
+            Point Center(Control control) => control.TranslatePoint(
+                new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value;
+
+            window.Show();
+            Layout();
+            var workspace = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var actions = window.FindControl<Grid>("NewTabActions")!;
+            var plus = window.FindControl<Button>("OpenNewPdfButton")!;
+            var separator = window.FindControl<Border>("NewTabSeparator")!;
+            Assert.Equal(Right(workspace), Left(actions), precision: 1);
+            Assert.False(separator.IsVisible);
+            Assert.Same(vm.OpenPdfCommand, plus.Command);
+
+            var first = new DocumentTabViewModel("first.pdf", service);
+            var second = new DocumentTabViewModel("second.pdf", service);
+            vm.OpenDocuments.Add(first);
+            vm.OpenDocuments.Add(second);
+            vm.SelectedDocument = first;
+            Layout();
+            Button LastTab() => window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Name == "TabSelectButton" && ReferenceEquals(button.DataContext, vm.OpenDocuments[^1]));
+            void AssertFollowsLastTab() => Assert.Equal(Right(LastTab()), Left(actions), precision: 1);
+            AssertFollowsLastTab();
+            Assert.True(separator.IsVisible);
+            var close = LastTab().GetVisualParent()!.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("tab-close"));
+            var closeCenter = Center(close);
+            var plusCenter = Center(plus);
+            Assert.Equal(closeCenter.Y, plusCenter.Y, precision: 1);
+            var closeIcon = close.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+            var plusIcon = plus.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+            Assert.Equal(Left(separator) - Right(closeIcon), Left(plusIcon) - Right(separator), precision: 1);
+
+            window.MouseMove(plusCenter);
+            var surface = plus.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>()
+                .Single(presenter => presenter.Name == "PART_ContentPresenter");
+            Assert.Equal(Color.Parse("#DDE3ED"), Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color);
+            Assert.Equal(new CornerRadius(8), surface.CornerRadius);
+            window.MouseMove(new Point(10, 10));
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color);
+
+            window.Width = 1100;
+            Layout();
+            AssertFollowsLastTab();
+            vm.SelectedDocument = second;
+            Layout();
+            Assert.False(separator.IsVisible);
+            AssertFollowsLastTab();
+            vm.OpenDocuments.Remove(first);
+            Layout();
+            AssertFollowsLastTab();
+
+            for (int index = 0; index < 10; index++)
+                vm.OpenDocuments.Add(new DocumentTabViewModel($"extra-{index}.pdf", service));
+            vm.SelectedDocument = vm.OpenDocuments[^1];
+            Layout();
+            Assert.True(window.FindControl<Button>("ScrollTabsRightButton")!.IsVisible);
+            AssertFollowsLastTab();
+            Assert.True(Right(plus) <= window.Bounds.Width);
+            Assert.True(Left(plus) >= 0);
+
+            vm.ShowHomeCommand.Execute(null);
+            vm.OpenDocuments.Clear();
+            Layout();
+            Assert.Equal(Right(workspace), Left(actions), precision: 1);
+            Assert.False(separator.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void SelectedDocumentPaintsAboveTheHoveredWorkspaceTabAtTheirSharedEdge()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("document.pdf", service);
+        vm.OpenDocuments.Add(document);
+        vm.SelectedDocument = document;
+        var window = new MainWindow { DataContext = vm };
+        try
+        {
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var workspace = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var scroller = window.FindControl<ScrollViewer>("DocumentTabScroller")!;
+            var tab = window.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "TabSelectButton");
+            var separator = window.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "TabSeparator");
+            void Hover(Control control) => window.MouseMove(control.TranslatePoint(
+                new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value);
+            void AssertSelectedDocumentCoversWorkspaceFoot()
+            {
+                // These are the sibling visuals whose order controls the shared edge.
+                // Raising a document's item container cannot raise it above WorkspaceTopTab.
+                Assert.Same(workspace.GetVisualParent(), scroller.GetVisualParent());
+                Assert.True(scroller.ZIndex > workspace.ZIndex);
+                var chrome = workspace.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+                Point rightFoot = chrome.TranslatePoint(new Point(chrome.Bounds.Width - 5, chrome.Bounds.Height - 1), tab)!.Value;
+                Assert.True(new Rect(tab.Bounds.Size).Contains(rightFoot));
+                Assert.False(separator.IsVisible);
+            }
+
+            Hover(workspace);
+            AssertSelectedDocumentCoversWorkspaceFoot();
+            Assert.Equal(Color.Parse("#DDE3ED"), Assert.IsAssignableFrom<ISolidColorBrush>(workspace.Background).Color);
+
+            vm.ShowHomeCommand.Execute(null);
+            Hover(tab);
+            Assert.True(workspace.ZIndex > scroller.ZIndex);
+            Assert.False(separator.IsVisible);
+
+            // Changing selection must restore the correct order synchronously.
+            Hover(workspace);
+            vm.SelectedDocument = document;
+            AssertSelectedDocumentCoversWorkspaceFoot();
+            window.MouseMove(new Point(10, 10));
+            Hover(workspace);
+            AssertSelectedDocumentCoversWorkspaceFoot();
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void HoverDrawsTheSelectedTabOutlineIncludingWhileOverItsCloseButton()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("document.pdf", service);
+        vm.OpenDocuments.Add(document);
+        vm.SelectedDocument = document;
+        var window = new MainWindow { DataContext = vm };
+        try
+        {
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TabSelectButton");
+            var chrome = tab.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+            GeometryDrawing DrawChrome(pdf_fluent.Controls.EdgeTabChrome? target = null)
+            {
+                var drawing = new DrawingGroup();
+                using (var context = drawing.Open()) (target ?? chrome).Render(context);
+                return Assert.IsType<GeometryDrawing>(Assert.Single(drawing.Children));
+            }
+            void Hover(Control control) => window.MouseMove(control.TranslatePoint(
+                new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value);
+            // DrawingGroup wraps each geometry in a new PlatformGeometry. Compare the
+            // underlying path to verify Render actually reused the selected outline.
+            object GeometryPath(GeometryDrawing drawing) => typeof(Geometry)
+                .GetProperty("PlatformImpl", System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!
+                .GetValue(drawing.Geometry)!;
+
+            var selected = DrawChrome();
+            Assert.NotNull(selected.Geometry);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(selected.Brush).Color);
+            vm.ShowHomeCommand.Execute(null);
+            window.UpdateLayout();
+            Hover(tab);
+            var hovered = DrawChrome();
+            Assert.False(chrome.IsActive);
+            Assert.Same(GeometryPath(selected), GeometryPath(hovered));
+            Assert.Equal(Color.Parse("#DDE3ED"), Assert.IsAssignableFrom<ISolidColorBrush>(hovered.Brush).Color);
+
+            var close = tab.GetVisualParent()!.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("tab-close"));
+            Hover(close);
+            var closeHovered = DrawChrome();
+            Assert.Same(GeometryPath(selected), GeometryPath(closeHovered));
+            Assert.Equal(Color.Parse("#DDE3ED"), Assert.IsAssignableFrom<ISolidColorBrush>(closeHovered.Brush).Color);
+            window.MouseMove(new Point(10, 10));
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(DrawChrome().Brush).Color);
+
+            var workspace = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var workspaceChrome = workspace.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+            var workspaceSelected = DrawChrome(workspaceChrome);
+            vm.SelectedDocument = document;
+            Hover(close);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(DrawChrome().Brush).Color);
+            Hover(workspace);
+            var workspaceHover = DrawChrome(workspaceChrome);
+            Assert.Same(GeometryPath(workspaceSelected), GeometryPath(workspaceHover));
+            Assert.Equal(Color.Parse("#DDE3ED"), Assert.IsAssignableFrom<ISolidColorBrush>(workspaceHover.Brush).Color);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void SelectedTabFeetRemainInsideEveryAncestorClipAtBothEndsOfTheStrip()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("document.pdf", service);
+        vm.OpenDocuments.Add(document);
+        vm.SelectedDocument = document;
+        var window = new MainWindow { DataContext = vm };
+        try
+        {
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TabSelectButton");
+            void AssertUnclippedFeet(Control button)
+            {
+                Assert.False(button.ClipToBounds);
+                var chrome = button.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+                Assert.True(chrome.IsActive);
+                // These points lie in the lower concave feet, outside the button's bounds.
+                foreach (double x in new[] { 5d, chrome.Bounds.Width - 5 })
+                {
+                    var foot = new Point(x, chrome.Bounds.Height - 1);
+                    foreach (var ancestor in chrome.GetVisualAncestors().Where(visual => visual.ClipToBounds))
+                    {
+                        Point point = chrome.TranslatePoint(foot, ancestor)!.Value;
+                        Assert.True(new Rect(ancestor.Bounds.Size).Contains(point),
+                            $"{ancestor.GetType().Name} clips a foot of {button.Name} at {point}.");
+                    }
+                }
+            }
+            // A single document is simultaneously the first and last scrolling tab.
+            AssertUnclippedFeet(tab);
+            vm.ShowHomeCommand.Execute(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            AssertUnclippedFeet(window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!);
+
+            for (int index = 0; index < 8; index++)
+                vm.OpenDocuments.Add(new DocumentTabViewModel($"extra-{index}.pdf", service));
+            vm.SelectedDocument = vm.OpenDocuments[^1];
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            Assert.True(window.FindControl<Button>("ScrollTabsRightButton")!.IsVisible);
+            var last = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Name == "TabSelectButton" && ReferenceEquals(button.DataContext, vm.SelectedDocument));
+            AssertUnclippedFeet(last);
+            vm.SelectedDocument = document;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            AssertUnclippedFeet(tab);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AdjacentTabsHideSeparatorsAroundSelectionAndHoverIncludingCloseButtons()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        for (int index = 0; index < 4; index++)
+            vm.OpenDocuments.Add(new DocumentTabViewModel($"document-{index}.pdf", service));
+        vm.SelectedDocument = vm.OpenDocuments[1];
+        var window = new MainWindow { DataContext = vm, Width = 1400 };
+        try
+        {
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var workspace = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var tabs = window.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>()
+                .Where(button => button.Name == "TabSelectButton")
+                .OrderBy(button => vm.OpenDocuments.IndexOf((DocumentTabViewModel)button.DataContext!)).ToArray();
+            var roots = tabs.Select(tab => (Border)tab.GetVisualParent()!.GetVisualParent()!).ToArray();
+            var separators = roots.Select(root => root.GetVisualDescendants().OfType<Border>()
+                .Single(border => border.Name == "TabSeparator")).ToArray();
+            void AssertSeparators(params bool[] expected) =>
+                Assert.Equal(expected, separators.Select(separator => separator.IsVisible).ToArray());
+            void Hover(Control control) => window.MouseMove(control.TranslatePoint(
+                new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value);
+
+            window.MouseMove(new Point(10, 10));
+            window.UpdateLayout();
+            AssertSeparators(true, false, false, true);
+            Assert.DoesNotContain(workspace.GetVisualDescendants(), visual => visual.Name == "TabSeparator");
+            for (int index = 0; index < tabs.Length; index++)
+            {
+                Control previous = index == 0 ? workspace : tabs[index - 1];
+                Assert.Equal(previous.TranslatePoint(new Point(previous.Bounds.Width, 0), window)!.Value.X,
+                    tabs[index].TranslatePoint(default, window)!.Value.X, precision: 1);
+                var chrome = tabs[index].GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+                Assert.Equal(-10, chrome.Bounds.X);
+                Assert.Equal(tabs[index].Bounds.Width + 20, chrome.Bounds.Width);
+                Assert.False(tabs[index].ClipToBounds, "The tab button must not clip its concave feet.");
+                Assert.All(chrome.GetVisualAncestors().TakeWhile(visual => visual != roots[index]),
+                    visual => Assert.False(visual.ClipToBounds, $"{visual.GetType().Name} clips the tab chrome."));
+                Assert.Equal(1, separators[index].Width);
+                if (separators[index].IsVisible)
+                {
+                    Assert.Equal(1, separators[index].Bounds.Width);
+                    Assert.Equal(16, separators[index].Bounds.Height);
+                }
+                Assert.Equal(16, separators[index].Height);
+                Assert.Equal(Color.Parse("#BFC5D0"),
+                    Assert.IsAssignableFrom<ISolidColorBrush>(separators[index].Background).Color);
+            }
+
+            Hover(tabs[2]);
+            AssertSeparators(true, false, false, false);
+            Hover(roots[2].GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("tab-close")));
+            AssertSeparators(true, false, false, false);
+            Hover(tabs[1]);
+            AssertSeparators(true, false, false, true);
+            Hover(workspace);
+            AssertSeparators(false, false, false, true);
+            window.MouseMove(new Point(10, 10));
+            vm.SelectedDocument = vm.OpenDocuments[3];
+            AssertSeparators(true, true, true, false);
+            vm.ShowHomeCommand.Execute(null);
+            AssertSeparators(false, true, true, true);
+
+            vm.OpenDocuments.RemoveAt(1);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var remainingSeparators = window.GetVisualDescendants().OfType<Border>()
+                .Where(border => border.Name == "TabSeparator").ToArray();
+            Assert.Equal(new[] { false, true, true }, remainingSeparators.Select(separator => separator.IsVisible));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TabsKeepThreeDistinctEdgeLevelsAndDoNotChangeOnSelectedHover()
     {
         using var vm = new MainViewModel();
@@ -257,7 +591,7 @@ public sealed class MainWindowTests
             var tabChrome = tabButton.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
             Assert.True(tabChrome.IsActive);
             Assert.False(tabChrome.IsHitTestVisible);
-            Assert.True(tabButton.GetVisualAncestors().OfType<Border>().First().ClipToBounds);
+            Assert.False(tabButton.GetVisualAncestors().OfType<Border>().First().ClipToBounds);
         }
         finally
         {

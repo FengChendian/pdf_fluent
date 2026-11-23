@@ -100,6 +100,12 @@
             <Setter Property="Background" Value="#ECEEFF" />
             <Setter Property="Foreground" Value="#625BE7" />
         </Style>
+        <Style Selector="Button.new-tab-button:pointerover">
+            <Setter Property="Background" Value="#DDE3ED" />
+        </Style>
+        <Style Selector="Button.new-tab-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#DDE3ED" />
+        </Style>
     </Window.Styles>
 
     <Grid ColumnDefinitions="72,*" RowDefinitions="48,*,Auto" UseLayoutRounding="True">
@@ -162,8 +168,11 @@
         </Border>
 
         <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource WorkspaceStripBrush}" ClipToBounds="True">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="6,0,10,0">
+            <Grid x:Name="TabStripLayout" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="10,0,10,0"
+                  SizeChanged="OnTabStripSizeChanged">
                 <ToggleButton x:Name="WorkspaceTopTab" Theme="{StaticResource EdgeTabTheme}"
+                              SizeChanged="OnTabStripSizeChanged"
+                              PointerEntered="OnTabPointerChanged" PointerExited="OnTabPointerChanged"
                               Click="OnWorkspaceTabClick"
                               IsChecked="{Binding IsWorkspaceTabSelected, Mode=OneWay}"
                               ToolTip.Tip="{Binding WorkspaceTabTitle}">
@@ -177,8 +186,12 @@
                     <i:Icon Value="fa-solid fa-chevron-left" FontSize="11" />
                 </Button>
                 <ScrollViewer x:Name="DocumentTabScroller" Grid.Column="2" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              Width="20" Margin="-10,0"
                               ScrollChanged="OnTabScrollChanged" SizeChanged="OnTabStripSizeChanged">
-                    <ItemsControl x:Name="DocumentTabs" ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Bottom"
+                    <!-- Keep both end tabs' feet inside the scrolling clip, while their
+                         bodies still touch the workspace tab and their neighbors. -->
+                    <ItemsControl x:Name="DocumentTabs" ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Bottom" Margin="10,0"
+                                  ClipToBounds="False"
                                   ContainerPrepared="OnTabContainerPrepared">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -188,13 +201,14 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:DocumentTabViewModel">
                                 <Border Width="{Binding $parent[Window].DocumentTabWidth}" Height="40" Background="Transparent"
-                                        ClipToBounds="True" x:CompileBindings="False">
+                                        PointerEntered="OnTabPointerChanged" PointerExited="OnTabPointerChanged"
+                                        x:CompileBindings="False">
                                     <Grid>
                                         <ToggleButton x:Name="TabSelectButton" Theme="{StaticResource EdgeTabTheme}"
                                                       Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
                                                       CommandParameter="{Binding}"
                                                       IsChecked="{Binding IsSelected, Mode=OneWay}"
-                                                      BorderThickness="0" Padding="22,0,46,0" Cursor="Hand"
+                                                      BorderThickness="0" Padding="12,0,40,0" Cursor="Hand"
                                                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                                       HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
                                             <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
@@ -203,16 +217,19 @@
                                                     <TextBlock Text="P" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 </Border>
-                                                <TextBlock Grid.Column="1" Text="{Binding DisplayFileName}" FontSize="12" Foreground="#51586B"
+                                                <TextBlock Grid.Column="1" Text="{Binding DisplayFileName}" FontSize="13" Foreground="#51586B"
                                                            TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayFileName}"
                                                            VerticalAlignment="Center" />
                                             </Grid>
                                         </ToggleButton>
-                                        <Button Classes="tab-close" Margin="0,0,17,0" HorizontalAlignment="Right"
+                                        <Border x:Name="TabSeparator" Width="1" Height="16" Background="#BFC5D0"
+                                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                IsVisible="False" IsHitTestVisible="False" />
+                                        <Button Classes="tab-close" Margin="0,0,8,0" HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding $parent[Window].DataContext.CloseDocumentCommand}"
                                                 CommandParameter="{Binding}" ToolTip.Tip="关闭">
-                                            <i:Icon Value="fa-solid fa-xmark" FontSize="11" Foreground="#8B92A3" />
+                                            <i:Icon Value="fa-solid fa-xmark" FontSize="13" Foreground="#8B92A3" />
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -221,12 +238,27 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="ScrollTabsRightButton" Grid.Column="3" Classes="plain-button" Width="28" Height="32"
+                <!-- The plus glyph is wider than the close glyph. Its center sits
+                     one pixel farther from the separator to give equal visible gaps. -->
+                <Grid x:Name="NewTabActions" Grid.Column="3" Width="46" Height="40" VerticalAlignment="Bottom" ZIndex="3">
+                    <Border x:Name="NewTabSeparator" Width="1" Height="16" Background="#BFC5D0"
+                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                            IsVisible="False" IsHitTestVisible="False" />
+                    <Button x:Name="OpenNewPdfButton" Classes="plain-button new-tab-button" Width="34" Height="34"
+                            Padding="0" CornerRadius="8" Cursor="Hand"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
+                        <i:Icon Value="fa-solid fa-plus" FontSize="13" Foreground="#9197A8" />
+                    </Button>
+                </Grid>
+                <Button x:Name="ScrollTabsRightButton" Grid.Column="4" Classes="plain-button" Width="28" Height="32"
                         IsVisible="False" Padding="0" CornerRadius="8" Click="OnScrollTabsRight" ToolTip.Tip="向右滚动标签">
                     <i:Icon Value="fa-solid fa-chevron-right" FontSize="11" />
                 </Button>
 
-                <Grid Grid.Column="4" Width="340" Margin="12,0,6,0" VerticalAlignment="Center"
+                <Grid x:Name="TabSearchHost" Grid.Column="6" Width="340" Margin="12,0,6,0" VerticalAlignment="Center"
+                      SizeChanged="OnTabStripSizeChanged"
                       IsVisible="{Binding IsHomeSelected}">
                     <TextBox x:Name="DocumentSearchBox" Text="{Binding SearchText}" PlaceholderText="搜索文档…"
                              Height="34" Padding="34,0,12,0" FontSize="12" CornerRadius="10"
@@ -235,11 +267,8 @@
                             Margin="12,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False" />
                 </Grid>
 
-                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <Button Classes="plain-button" Width="34" Height="34" Padding="0" CornerRadius="8"
-                            Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
-                        <i:Icon Value="fa-solid fa-plus" FontSize="13" Foreground="#9197A8" />
-                    </Button>
+                <StackPanel x:Name="TabToolbar" Grid.Column="7" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                            SizeChanged="OnTabStripSizeChanged">
                     <ProgressBar Width="56" Height="4" IsIndeterminate="True"
                                  IsVisible="{Binding IsOpening}" Foreground="#6C5CE7" />
                     <Button x:Name="MoreActionsButton" Classes="more-actions-button" Width="34" Height="34" Padding="0"

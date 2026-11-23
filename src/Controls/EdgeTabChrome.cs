@@ -4,7 +4,7 @@ using Avalonia.Media;
 
 namespace pdf_fluent.Controls;
 
-/// <summary>Draws a browser tab entirely inside its allocation, including its concave feet.</summary>
+/// <summary>Draws a browser tab with concave feet shared with neighboring tabs.</summary>
 public sealed class EdgeTabChrome : Control
 {
     public static readonly StyledProperty<IBrush?> FillProperty =
@@ -23,12 +23,7 @@ public sealed class EdgeTabChrome : Control
     public override void Render(DrawingContext context)
     {
         if (Bounds.Width <= 0 || Bounds.Height <= 0) return;
-        if (!IsActive)
-        {
-            context.DrawRectangle(Fill, null,
-                new Rect(10, 2, Math.Max(0, Bounds.Width - 20), Math.Max(0, Bounds.Height - 6)), 8, 8);
-            return;
-        }
+        // Hover and selection share the same outline; their fill distinguishes them.
         if (_geometry is null || _geometrySize != Bounds.Size)
         {
             _geometrySize = Bounds.Size;

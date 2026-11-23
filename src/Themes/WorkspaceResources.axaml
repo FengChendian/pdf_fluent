@@ -42,19 +42,23 @@
         the current tab keeps the white surface, matching Edge.
     -->
     <ControlTheme x:Key="EdgeTabTheme" TargetType="ToggleButton">
+        <!-- The concave feet extend into adjacent tabs. Button clips by default. -->
+        <Setter Property="ClipToBounds" Value="False" />
         <Setter Property="Height" Value="40" />
         <Setter Property="VerticalAlignment" Value="Bottom" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="#777E91" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="24,0" />
+        <Setter Property="Padding" Value="12,0" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <ControlTemplate>
                 <Grid>
-                    <controls:EdgeTabChrome Fill="{TemplateBinding Background}"
+                    <!-- Share the concave feet with neighboring tabs instead of reserving
+                         ten pixels of empty space on each side of every tab body. -->
+                    <controls:EdgeTabChrome Margin="-10,0" Fill="{TemplateBinding Background}"
                                             IsActive="{TemplateBinding IsChecked}" />
                     <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
                                       Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -66,7 +70,7 @@
                 </Grid>
             </ControlTemplate>
         </Setter>
-        <Style Selector="^:pointerover">
+        <Style Selector="^:pointerover, ^.tab-hover">
             <Setter Property="Background" Value="{DynamicResource WorkspaceTabHoverBrush}" />
         </Style>
         <Style Selector="^:checked, ^:checked:pointerover">
