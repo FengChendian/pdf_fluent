@@ -367,6 +367,9 @@ public sealed class MainWindowTests
             var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TabSelectButton");
             var chrome = tab.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
             var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+            var fileIcon = tab.GetVisualDescendants().OfType<Image>().Single();
+            Assert.NotNull(fileIcon.Source);
+            Assert.Equal(new Size(22, 22), fileIcon.Bounds.Size);
             var content = window.FindControl<Grid>("WorkspaceContent")!;
             Assert.True(chrome.IsActive);
             Assert.False(chrome.IsHitTestVisible);
@@ -421,9 +424,27 @@ public sealed class MainWindowTests
             var label = workspaceTab.GetVisualDescendants().OfType<TextBlock>()
                 .Single(text => text.Text is "主页" or "收藏" or "设置");
             var icon = workspaceTab.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+            void AssertSelectedWorkspaceMatchesNavigation(string navigationName)
+            {
+                var navigation = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>(navigationName)!;
+                var navigationIcon = navigation.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+                Assert.Equal(navigationIcon.Value, icon.Value);
+                Assert.Equal(Color.Parse("#625BE7"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(navigationIcon.Foreground).Color,
+                    Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                window.MouseMove(Center(workspaceTab, window));
+                Assert.Equal("Arrow", workspaceTab.Cursor?.ToString());
+                var chrome = workspaceTab.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+                Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+                var surface = Named<Avalonia.Controls.Presenters.ContentPresenter>(workspaceTab, "PART_ContentPresenter");
+                Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color);
+                Assert.Equal(Color.Parse("#625BE7"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                window.MouseMove(new Point(10, 10));
+            }
             Assert.Equal("主页", label.Text);
             Assert.Equal("fa-solid fa-house", icon.Value);
             Assert.True(workspaceTab.IsChecked);
+            AssertSelectedWorkspaceMatchesNavigation("HomeNavButton");
 
             // One fixed tab only: favorites/settings must not append new tabs.
             Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
@@ -434,6 +455,7 @@ public sealed class MainWindowTests
             Assert.Equal("设置", label.Text);
             Assert.Equal("fa-solid fa-gear", icon.Value);
             Assert.True(workspaceTab.IsChecked);
+            AssertSelectedWorkspaceMatchesNavigation("SettingsNavButton");
             Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
                 .OfType<Avalonia.Controls.Primitives.ToggleButton>());
 
@@ -442,6 +464,7 @@ public sealed class MainWindowTests
             Assert.Equal("收藏", label.Text);
             Assert.Equal("fa-solid fa-star", icon.Value);
             Assert.True(workspaceTab.IsChecked);
+            AssertSelectedWorkspaceMatchesNavigation("FavoritesNavButton");
             Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
                 .OfType<Avalonia.Controls.Primitives.ToggleButton>());
 
@@ -449,6 +472,7 @@ public sealed class MainWindowTests
             window.UpdateLayout();
             Assert.Equal("主页", label.Text);
             Assert.Equal("fa-solid fa-house", icon.Value);
+            AssertSelectedWorkspaceMatchesNavigation("HomeNavButton");
         }
         finally { window.Close(); }
     }
@@ -482,6 +506,10 @@ public sealed class MainWindowTests
             viewModel.SelectedDocument = document;
             window.UpdateLayout();
             Assert.False(workspaceTab.IsChecked);
+            window.MouseMove(Center(workspaceTab, window));
+            Assert.Equal("Hand", workspaceTab.Cursor?.ToString());
+            var icon = workspaceTab.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+            Assert.Equal(Color.Parse("#777E91"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
         }
         finally { window.Close(); }
     }
@@ -665,17 +693,24 @@ public sealed class MainWindowTests
                 new Point(moreButton.Bounds.Width / 2, moreButton.Bounds.Height / 2), window)!.Value;
             Assert.True(buttonCenter.X > window.Bounds.Width / 2);
             Assert.InRange(buttonCenter.Y, 0, 56);
+            double rightInset = window.Bounds.Width - moreButton.TranslatePoint(
+                new Point(moreButton.Bounds.Width, 0), window)!.Value.X;
+            Assert.Equal(16, rightInset, precision: 1);
 
             window.MouseMove(buttonCenter);
             Assert.Equal(
-                Color.Parse("#F0F3F9"),
+                Color.Parse("#DDE3ED"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(moreButton.Background).Color);
             Avalonia.Controls.Presenters.ContentPresenter moreSurface = moreButton.GetVisualChildren()
                 .OfType<Avalonia.Controls.Presenters.ContentPresenter>()
                 .Single();
             Assert.Equal(
-                Color.Parse("#F0F3F9"),
+                Color.Parse("#DDE3ED"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(moreSurface.Background).Color);
+            Assert.Equal(new CornerRadius(10), moreSurface.CornerRadius);
+            window.MouseMove(new Point(10, 10));
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(moreSurface.Background).Color);
+            window.MouseMove(buttonCenter);
 
             window.MouseDown(buttonCenter, MouseButton.Left);
             window.MouseUp(buttonCenter, MouseButton.Left);

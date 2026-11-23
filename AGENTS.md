@@ -26,7 +26,7 @@
 - 发布必须保持 `PublishReadyToRun=true`；默认同时启用 `PublishReadyToRunComposite=true`。不要把“打开 PDF 卡死”归因于 PDFium 不兼容而关闭 R2R 或排除 `PDFiumCore.dll`。
 - PDFiumCore 生成的委托属性（`IFSDK_PAUSE.NeedToPauseNow`、`FPDF_FILEWRITE_.WriteBlock` 等）只保存原生函数指针，不持有托管委托。赋值后必须在整个原生调用期间保留委托的强引用，并在调用结束后 `GC.KeepAlive`；否则 R2R 或 GC 压力下会触发 `Environment.FailFast`（回调了已回收的委托）。
 - 命令行 PDF 的打开应放在主窗口首帧之后（`MainWindow.Opened`），不要在 `OnFrameworkInitializationCompleted` 里同步打开文档而拖慢 UI 出现时间。
-- 启动耗时排查使用 `FLUENTPDF_STARTUP_TRACE=1`，分析方法和基准数据见 `docs/STARTUP-PERFORMANCE.md`。
+- 启动耗时排查使用 `FLUENTPDF_STARTUP_TRACE=1`，诊断方法和维护约定见 `docs/STARTUP-PERFORMANCE.md`。
 
 # 测试资源备注
 

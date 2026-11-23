@@ -23,29 +23,11 @@
 
 ## 启动性能约定
 
-应用发布时默认启用 ReadyToRun，并优先使用 Composite R2R：
+自包含 Windows 发布默认启用 ReadyToRun 和 Composite R2R。配置条件以
+`src/pdf_fluent.csproj` 为准；不要通过关闭 R2R 绕过 PDFiumCore 回调委托的生命周期问题。
+启动日志采集、回调保活要求和回归验证方法统一见 [启动性能排查](STARTUP-PERFORMANCE.md)。
 
-```xml
-<PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
-<PublishReadyToRunComposite Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRunComposite>
-```
-
-这不是导致 PDF 打开异常的选项。PDF 打开异常的真实原因是 PDFiumCore 的
-`IFSDK_PAUSE` 回调委托没有被调用方保活，ReadyToRun 只是改变了 GC 时机，
-让这个潜在的 use-after-free 更容易暴露；修复位于
-`src/Services/PDFiumService.cs` 的 `RenderPageIntoBuffer` 和
-`SaveDocumentAsCopy`，不要通过关闭 ReadyToRun 来绕开。
-
-如果需要排查冷启动耗时，可在启动前设置：
-
-```powershell
-$env:FLUENTPDF_STARTUP_TRACE = "1"
-$env:FLUENTPDF_STARTUP_TRACE_FILE = "$PWD\startup.log"
-```
-
-然后正常启动应用，日志会按阶段记录从进程创建到首帧的时间。该诊断默认关闭，
-不会影响正常发布。不要为了追求启动时间启用 `PublishSingleFile`、裁剪或
-`PublishTrimmed`；这些选项会改变原生库和 Avalonia 资源的解析方式。
+发布保持 `PublishSingleFile=false` 和 `PublishTrimmed=false`。
 
 ## 版本号约定
 

@@ -67,7 +67,7 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Button.more-actions-button:pointerover">
-            <Setter Property="Background" Value="#F0F3F9" />
+            <Setter Property="Background" Value="{DynamicResource WorkspaceTabHoverBrush}" />
         </Style>
         <Style Selector="Button.tab-close">
             <Setter Property="Width" Value="26" />
@@ -87,6 +87,9 @@
         <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F3F9" />
         </Style>
+        <Style Selector="Button.more-actions-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource WorkspaceTabHoverBrush}" />
+        </Style>
         <Style Selector="Button.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F2F8" />
         </Style>
@@ -105,6 +108,12 @@
         </Style>
         <Style Selector="Button.new-tab-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#DDE3ED" />
+        </Style>
+        <Style Selector="ToggleButton.workspace-tab:checked">
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+        <Style Selector="ToggleButton.workspace-tab:checked i|Icon">
+            <Setter Property="Foreground" Value="#625BE7" />
         </Style>
     </Window.Styles>
 
@@ -136,11 +145,11 @@
                         <Border Width="3" Height="22" CornerRadius="1.5" Background="#6C5CE7"
                                 HorizontalAlignment="Left" Margin="6.5,0,6.5,0" VerticalAlignment="Center"
                                 IsVisible="{Binding IsFavoritesSelected}" />
-                        <ToggleButton Classes="nav-button" Classes.selected="{Binding IsFavoritesSelected}"
+                        <ToggleButton x:Name="FavoritesNavButton" Classes="nav-button" Classes.selected="{Binding IsFavoritesSelected}"
                                       Command="{Binding ShowFavoritesCommand}"
                                       IsChecked="{Binding IsFavoritesSelected, Mode=OneWay}" ToolTip.Tip="收藏">
                             <Grid>
-                                <i:Icon x:Name="FavoriteNavIcon" Value="fa-regular fa-star" FontSize="16"
+                                <i:Icon x:Name="FavoriteNavIcon" Value="fa-solid fa-star" FontSize="16"
                                         Foreground="{Binding $parent[ToggleButton].Foreground}" />
                                 <Border x:Name="FavoriteNotificationDot" Width="7" Height="7" CornerRadius="3.5"
                                         Background="#7665E8" BorderBrush="#F6F7FC" BorderThickness="1.5"
@@ -168,9 +177,9 @@
         </Border>
 
         <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource WorkspaceStripBrush}" ClipToBounds="True">
-            <Grid x:Name="TabStripLayout" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="10,0,10,0"
+            <Grid x:Name="TabStripLayout" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="10,0,16,0"
                   SizeChanged="OnTabStripSizeChanged">
-                <ToggleButton x:Name="WorkspaceTopTab" Theme="{StaticResource EdgeTabTheme}"
+                <ToggleButton x:Name="WorkspaceTopTab" Classes="workspace-tab" Theme="{StaticResource EdgeTabTheme}"
                               SizeChanged="OnTabStripSizeChanged"
                               PointerEntered="OnTabPointerChanged" PointerExited="OnTabPointerChanged"
                               Click="OnWorkspaceTabClick"
@@ -212,11 +221,8 @@
                                                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                                       HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
                                             <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
-                                                <Border Width="22" Height="22"
-                                                        Background="{StaticResource PdfIconGradientBrush}" CornerRadius="6">
-                                                    <TextBlock Text="P" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
+                                                <Image Source="/Assets/pdf.ico" Width="22" Height="22" Stretch="Uniform"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="1" Text="{Binding DisplayFileName}" FontSize="13" Foreground="#51586B"
                                                            TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayFileName}"
                                                            VerticalAlignment="Center" />

@@ -19,6 +19,7 @@ public partial class PdfDocumentView : UserControl
     /// re-render of the visible pages is coalesced over this delay.
     /// </summary>
     private static readonly TimeSpan RenderScalingDebounce = TimeSpan.FromMilliseconds(180);
+    private static readonly TimeSpan ReaderFlyoutAnimationDuration = TimeSpan.FromMilliseconds(180);
 
     private PdfZoomController? _zoomController;
     private TopLevel? _topLevel;
@@ -36,22 +37,25 @@ public partial class PdfDocumentView : UserControl
         InitializeTextInteraction();
         DocumentScroller.ScrollChanged += OnDocumentScrollChanged;
         TableOfContentsButton.IsCheckedChanged += OnTableOfContentsButtonToggled;
-        TableOfContentsOverlay.Transitions =
+        TableOfContentsOverlay.Transitions = CreateReaderFlyoutTransitions();
+        PageJumpOverlay.Transitions = CreateReaderFlyoutTransitions();
+        AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, OnPageJumpPointerPressed, RoutingStrategies.Tunnel);
+    }
+
+    private static Avalonia.Animation.Transitions CreateReaderFlyoutTransitions() =>
         [
             new Avalonia.Animation.DoubleTransition
             {
                 Property = OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(180),
+                Duration = ReaderFlyoutAnimationDuration,
             },
             new Avalonia.Animation.ThicknessTransition
             {
                 Property = MarginProperty,
-                Duration = TimeSpan.FromMilliseconds(180),
+                Duration = ReaderFlyoutAnimationDuration,
             },
         ];
-        AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
-        AddHandler(PointerPressedEvent, OnPageJumpPointerPressed, RoutingStrategies.Tunnel);
-    }
 
     internal PdfZoomController? ZoomController => _zoomController;
     internal TimeSpan PageIndicatorAutoHideDelay { get; set; } = TimeSpan.FromMilliseconds(800);
@@ -253,6 +257,7 @@ public partial class PdfDocumentView : UserControl
     {
         if (PageJumpButton.IsChecked != true)
         {
+            PageJumpOverlay.Classes.Remove("open");
             PageJumpOverlay.IsVisible = false;
             return;
         }
@@ -267,6 +272,7 @@ public partial class PdfDocumentView : UserControl
         PageJumpTextBox.Text = document.CurrentPage.ToString();
         PageJumpError.IsVisible = false;
         PageJumpOverlay.IsVisible = true;
+        PageJumpOverlay.Classes.Add("open");
         PageJumpTextBox.Focus();
         PageJumpTextBox.SelectAll();
     }
@@ -322,6 +328,7 @@ public partial class PdfDocumentView : UserControl
     private void ClosePageJump()
     {
         PageJumpButton.IsChecked = false;
+        PageJumpOverlay.Classes.Remove("open");
         PageJumpOverlay.IsVisible = false;
         PageJumpError.IsVisible = false;
     }
@@ -342,7 +349,7 @@ public partial class PdfDocumentView : UserControl
         TableOfContentsOverlay.Classes.Remove("open");
         _tocCloseTimer = DispatcherTimer.RunOnce(
             HideTableOfContentsAfterClose,
-            TimeSpan.FromMilliseconds(180));
+            ReaderFlyoutAnimationDuration);
     }
 
     private void HideTableOfContentsAfterClose()
@@ -437,11 +444,10 @@ public partial class PdfDocumentView : UserControl
 
         document.SyncRealizedPages(
             realizedPages, visiblePages, panel?.ScrollDirection ?? 0, panel?.CurrentPageIndex);
-        if (_pendingPageIndex is int pendingPageIndex &&
-            document.CurrentPage == pendingPageIndex + 1)
-        {
-            _pendingPageIndex = null;
-        }
+        // Layout has settled the actual page, even when the requested page
+        // cannot reach the viewport top because scrolling is clamped at the end.
+        // Keep pending targets only between clicks before this layout pass.
+        _pendingPageIndex = null;
         if (_lastObservedPageNumber != document.CurrentPage)
         {
             _lastObservedPageNumber = document.CurrentPage;

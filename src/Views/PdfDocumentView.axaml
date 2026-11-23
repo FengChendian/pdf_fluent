@@ -90,6 +90,16 @@
             <Setter Property="Background" Value="#F0EDFF" />
             <Setter Property="CornerRadius" Value="8" />
         </Style>
+        <Style Selector="Button.page-jump-submit">
+            <Setter Property="Background" Value="#6C5CE7" />
+        </Style>
+        <Style Selector="Button.page-jump-submit:pointerover">
+            <Setter Property="Background" Value="#5B4BD5" />
+        </Style>
+        <Style Selector="Button.page-jump-submit:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#5B4BD5" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
         <Style Selector="TextBox.page-jump-input:pointerover /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="#DDE2EC" />
             <Setter Property="BorderThickness" Value="1" />
@@ -105,7 +115,7 @@
             <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="BorderBrush" Value="#DDE2EC" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="24" />
+            <Setter Property="CornerRadius" Value="12" />
             <Setter Property="BoxShadow" Value="0 4 18 0 #14000000" />
         </Style>
         <Style Selector="Border.page-navigation">
@@ -114,11 +124,19 @@
         </Style>
         <Style Selector="Grid.toc-flyout">
             <Setter Property="Opacity" Value="0" />
-            <Setter Property="Margin" Value="0,40,0,20" />
+            <Setter Property="Margin" Value="0,32,0,20" />
         </Style>
         <Style Selector="Grid.toc-flyout.open">
             <Setter Property="Opacity" Value="1" />
-            <Setter Property="Margin" Value="0,48,0,20" />
+            <Setter Property="Margin" Value="0,40,0,20" />
+        </Style>
+        <Style Selector="Grid.page-jump-flyout">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="Margin" Value="0,32,16,0" />
+        </Style>
+        <Style Selector="Grid.page-jump-flyout.open">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Margin" Value="0,40,16,0" />
         </Style>
         <Style Selector="ToggleButton.toc-expander">
             <Setter Property="Width" Value="24" />
@@ -172,7 +190,7 @@
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*" Background="{DynamicResource WorkspaceCanvasBrush}" ClipToBounds="True">
-        <Border x:Name="ReaderHeader" MinHeight="56" Padding="16,8" Background="{DynamicResource WorkspaceSurfaceBrush}"
+        <Border x:Name="ReaderHeader" MinHeight="48" Padding="16,4" Background="{DynamicResource WorkspaceSurfaceBrush}"
                 BorderBrush="{DynamicResource WorkspaceBorderBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
                 <ToggleButton x:Name="TableOfContentsButton" Classes="tool-button"
@@ -256,29 +274,28 @@
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="PageNavigation" Classes="page-navigation" Padding="0" Height="34" Width="190" Grid.Column="2"
+                <Border x:Name="PageNavigation" Classes="page-navigation" Padding="0" Height="34" Width="144" Grid.Column="2"
                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0"
                         IsVisible="{Binding IsLoaded}">
-                    <Grid>
-                        <ToggleButton x:Name="PageJumpButton" Classes="page-jump-button"
-                                      HorizontalAlignment="Stretch"
+                    <Grid ColumnDefinitions="32,*,32" ColumnSpacing="3">
+                        <Button x:Name="PreviousPageButton" Classes="tool-button" Click="OnPreviousPageClick"
+                                IsEnabled="{Binding CanGoToPreviousPage}" ToolTip.Tip="上一页">
+                            <i:Icon Value="fa-solid fa-chevron-left" FontSize="11"
+                                    Foreground="{Binding $parent[Button].Foreground}" />
+                        </Button>
+                        <ToggleButton x:Name="PageJumpButton" Grid.Column="1" Classes="page-jump-button"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                       IsCheckedChanged="OnPageJumpButtonToggled"
-                                      AutomationProperties.Name="跳转到指定页" ToolTip.Tip="跳转到指定页" />
-                        <StackPanel Orientation="Horizontal" Spacing="3" Height="34" HorizontalAlignment="Center">
-                            <Button x:Name="PreviousPageButton" Classes="tool-button" Click="OnPreviousPageClick"
-                                    IsEnabled="{Binding CanGoToPreviousPage}" ToolTip.Tip="上一页">
-                                <i:Icon Value="fa-solid fa-chevron-left" FontSize="11"
-                                        Foreground="{Binding $parent[Button].Foreground}" />
-                            </Button>
+                                      AutomationProperties.Name="跳转到指定页" ToolTip.Tip="跳转到指定页">
                             <TextBlock x:Name="PageIndicatorText" Text="{Binding PageIndicator}" MinWidth="58"
                                        FontSize="12" Foreground="#656B7C" TextAlignment="Center"
                                        VerticalAlignment="Center" IsHitTestVisible="False" />
-                            <Button x:Name="NextPageButton" Classes="tool-button" Click="OnNextPageClick"
-                                    IsEnabled="{Binding CanGoToNextPage}" ToolTip.Tip="下一页">
-                                <i:Icon Value="fa-solid fa-chevron-right" FontSize="11"
-                                        Foreground="{Binding $parent[Button].Foreground}" />
-                            </Button>
-                        </StackPanel>
+                        </ToggleButton>
+                        <Button x:Name="NextPageButton" Grid.Column="2" Classes="tool-button" Click="OnNextPageClick"
+                                IsEnabled="{Binding CanGoToNextPage}" ToolTip.Tip="下一页">
+                            <i:Icon Value="fa-solid fa-chevron-right" FontSize="11"
+                                    Foreground="{Binding $parent[Button].Foreground}" />
+                        </Button>
                     </Grid>
                 </Border>
             </Grid>
@@ -348,35 +365,35 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="PageJumpOverlay" Grid.RowSpan="2" Width="190"
-              HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,48,16,0"
+        <Grid x:Name="PageJumpOverlay" Classes="page-jump-flyout" Grid.RowSpan="2" Width="{Binding #PageNavigation.Bounds.Width}"
+              HorizontalAlignment="Right" VerticalAlignment="Top"
               IsVisible="False">
             <Border x:Name="PageJumpPanel" Margin="0,8,0,0"
                     Background="#FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
                     CornerRadius="12" BoxShadow="0 8 26 0 #1F26334A" />
             <Path x:Name="PageJumpPointerFill"
                   Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8 L 20,12 L 0,12 Z"
-                  Width="20" Height="12" Margin="0,0,85,0"
-                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Width="20" Height="12"
+                  HorizontalAlignment="Center" VerticalAlignment="Top"
                   Fill="#FFFFFF" IsHitTestVisible="False" />
             <Path x:Name="PageJumpPointer"
                   Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8"
-                  Width="20" Height="12" Margin="0,0,85,0"
-                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Width="20" Height="12"
+                  HorizontalAlignment="Center" VerticalAlignment="Top"
                   Stroke="#DDE2EC" StrokeThickness="1" IsHitTestVisible="False" />
             <Border Margin="0,8,0,0" CornerRadius="12" ClipToBounds="True">
                 <Grid RowDefinitions="Auto,Auto" Margin="12">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <TextBox x:Name="PageJumpTextBox" Classes="page-jump-input" Height="34" Padding="10,6"
+                        <TextBox x:Name="PageJumpTextBox" Classes="page-jump-input" MinWidth="0" Height="34" Padding="10,6"
                                  FontSize="12" CornerRadius="8" VerticalContentAlignment="Center"
                                  Background="#FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
                                  SelectionBrush="#DCEBFF" SelectionForegroundBrush="#365E91"
                                  TextAlignment="Center" PlaceholderText="页码" AutomationProperties.Name="目标页码"
                                  TextChanged="OnPageJumpTextChanged" KeyDown="OnPageJumpTextBoxKeyDown" />
-                        <Button x:Name="GoToPageButton" Grid.Column="1" Content="跳转"
+                        <Button x:Name="GoToPageButton" Classes="page-jump-submit" Grid.Column="1" Content="跳转"
                                 Height="34" Padding="12,0" FontSize="12" CornerRadius="8"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                VerticalAlignment="Center" Background="#6C5CE7" Foreground="#FFFFFF"
+                                VerticalAlignment="Center" Foreground="#FFFFFF"
                                 Cursor="Hand" Click="OnGoToPageClick" />
                     </Grid>
                     <TextBlock x:Name="PageJumpError" Grid.Row="1" FontSize="11" Margin="0,8,0,0"
@@ -443,11 +460,12 @@
         </Border>
 
         <Border x:Name="SearchPanel" Classes="reader-pill" Grid.RowSpan="2" Width="320" MaxHeight="480"
-                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,64,20,0"
-                Padding="12" IsVisible="{Binding IsSearchPanelVisible}">
-            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,56,20,0"
+                Padding="12,8,12,12" IsVisible="{Binding IsSearchPanelVisible}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
                 <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Text="文档内搜索" FontSize="14" FontWeight="SemiBold" Foreground="#424758" />
+                    <TextBlock x:Name="SearchPanelTitle" Text="文档内搜索" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#424758" VerticalAlignment="Center" />
                     <Button x:Name="CloseSearchButton" Grid.Column="1" Classes="tool-button"
                             Width="26" Height="26" Click="OnCloseSearchClick" ToolTip.Tip="关闭搜索">
                         <i:Icon Value="fa-solid fa-xmark" FontSize="12"
@@ -455,12 +473,12 @@
                     </Button>
                 </Grid>
                 <TextBox x:Name="SearchTextBox" Grid.Row="1" Text="{Binding SearchQuery}"
-                         PlaceholderText="输入关键词…" CornerRadius="8" MinHeight="34" />
-                <Grid Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="6">
-                    <TextBlock Text="{Binding SearchStatus}" FontSize="11" Foreground="#858B9A" />
+                         PlaceholderText="输入关键词…" CornerRadius="8" MinHeight="34" Margin="0,14,0,0" />
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="0,10,0,0">
+                    <TextBlock x:Name="SearchStatusText" Text="{Binding SearchStatus}" FontSize="11" Foreground="#858B9A" />
                     <ListBox x:Name="SearchResultsList" Grid.Row="1" ItemsSource="{Binding SearchResults}"
                              SelectionChanged="OnSearchResultSelected" BorderThickness="0" Background="Transparent"
-                             MinHeight="36" MaxHeight="340">
+                             IsVisible="{Binding !!SearchResults.Count}" Margin="0,6,0,0" MaxHeight="340">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <VirtualizingStackPanel />
@@ -479,7 +497,7 @@
                     </ListBox>
                 </Grid>
                 <TextBlock Grid.Row="3" Text="{Binding HighlightErrorMessage}" TextWrapping="Wrap"
-                           FontSize="11" Foreground="#B45D68"
+                           FontSize="11" Foreground="#B45D68" Margin="0,10,0,0"
                            IsVisible="{Binding HighlightErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
             </Grid>
         </Border>
