@@ -1,0 +1,80 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:pdf_fluent.Controls">
+    <SolidColorBrush x:Key="WorkspaceSurfaceBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="WorkspaceStripBrush" Color="#EEF1F7" />
+    <SolidColorBrush x:Key="WorkspaceCanvasBrush" Color="#EEF1F8" />
+    <SolidColorBrush x:Key="WorkspaceBorderBrush" Color="#E4E7EF" />
+    <!-- Three distinct tab levels, Edge-style: strip (inactive), hover, white (selected). -->
+    <SolidColorBrush x:Key="WorkspaceTabHoverBrush" Color="#DDE3ED" />
+    <SolidColorBrush x:Key="WorkspaceAccentBrush" Color="#6C5CE7" />
+
+    <ControlTheme x:Key="MoreActionsMenuPresenterTheme" TargetType="MenuFlyoutPresenter"
+                  BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
+        <Setter Property="MinWidth" Value="172" />
+        <Setter Property="Padding" Value="0,4" />
+        <Setter Property="Background" Value="#FFFFFF" />
+        <Setter Property="BorderBrush" Value="#E4E7EF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+    </ControlTheme>
+    <ControlTheme x:Key="MoreActionsMenuItemTheme" TargetType="MenuItem"
+                  BasedOn="{StaticResource {x:Type MenuItem}}">
+        <Setter Property="Margin" Value="4,0" />
+        <Setter Property="Padding" Value="10,9" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#51596D" />
+        <Setter Property="FontSize" Value="12" />
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="#F0F3F9" />
+            <Setter Property="Foreground" Value="#424758" />
+        </Style>
+        <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+    </ControlTheme>
+
+    <!--
+        The tab chrome paints the background itself, so the template content host must
+        stay transparent: the Fluent window styles otherwise paint their own hover
+        brush over the selected tab. The checked rule is intentionally last so hovering
+        the current tab keeps the white surface, matching Edge.
+    -->
+    <ControlTheme x:Key="EdgeTabTheme" TargetType="ToggleButton">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#777E91" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="24,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid>
+                    <controls:EdgeTabChrome Fill="{TemplateBinding Background}"
+                                            IsActive="{TemplateBinding IsChecked}" />
+                    <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                                      Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    <Border x:Name="KeyboardFocus" IsVisible="False" Margin="12,3,12,3" CornerRadius="7"
+                            BorderBrush="{DynamicResource WorkspaceAccentBrush}" BorderThickness="2" IsHitTestVisible="False" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource WorkspaceTabHoverBrush}" />
+        </Style>
+        <Style Selector="^:checked, ^:checked:pointerover">
+            <Setter Property="Background" Value="{DynamicResource WorkspaceSurfaceBrush}" />
+            <Setter Property="Foreground" Value="#424758" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#KeyboardFocus">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

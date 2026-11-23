@@ -11,93 +11,171 @@ using pdf_fluent.Services;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
+using static pdf_fluent.Tests.PdfTestHelpers;
 
 namespace pdf_fluent.Tests;
 
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
-    public void PagePaletteAndTabBrushesMatchTheRequestedColors()
+    public void TabsKeepThreeDistinctEdgeLevelsAndDoNotChangeOnSelectedHover()
+    {
+        using var vm = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("a-long-document-title.pdf", service);
+        vm.OpenDocuments.Add(document);
+        vm.SelectedDocument = document;
+        var window = new MainWindow { DataContext = vm };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TabSelectButton");
+            var chrome = tab.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+            var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+            var content = window.FindControl<Grid>("WorkspaceContent")!;
+            Assert.True(chrome.IsActive);
+            Assert.False(chrome.IsHitTestVisible);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+            Assert.Equal(40, tab.Bounds.Height);
+            Assert.Equal(content.TranslatePoint(default, window)!.Value.Y,
+                tab.TranslatePoint(new Point(0, tab.Bounds.Height), window)!.Value.Y);
+
+            // The selected Edge tab keeps its white surface while the pointer is over it.
+            window.MouseMove(tab.TranslatePoint(new Point(40, 20), window)!.Value);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+
+            // Inactive tabs use a clearly darker hover level than the strip, while the
+            // selected level stays white. All three levels must be distinct.
+            vm.ShowHomeCommand.Execute(null);
+            window.UpdateLayout();
+            Assert.False(chrome.IsActive);
+            Color strip = Color.Parse("#EEF1F7");
+            Color hover = Color.Parse("#DDE3ED");
+            Assert.Equal(3, new[] { strip, hover, Colors.White }.Distinct().Count());
+            window.MouseMove(new Point(10, 10));
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            window.MouseMove(tab.TranslatePoint(new Point(40, 20), window)!.Value);
+            Assert.Equal(hover, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+
+            var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var workspaceChrome = workspaceTab.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+            Assert.True(workspaceChrome.IsActive);
+            window.MouseMove(workspaceTab.TranslatePoint(
+                new Point(workspaceTab.Bounds.Width / 2, workspaceTab.Bounds.Height / 2), window)!.Value);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(workspaceChrome.Fill).Color);
+            var home = window.GetVisualDescendants().OfType<HomeView>().Single();
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(home.Background).Color);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WorkspaceTabMorphsInsteadOfAddingFavoritesAndSettingsTabs()
     {
         using var viewModel = new MainViewModel();
-        using var firstService = new FakePdfDocumentService(1);
-        using var secondService = new FakePdfDocumentService(1);
-        var first = new DocumentTabViewModel("first.pdf", firstService);
-        var second = new DocumentTabViewModel("second.pdf", secondService);
-        viewModel.OpenDocuments.Add(first);
-        viewModel.OpenDocuments.Add(second);
-        viewModel.SelectedDocument = first;
-
         var window = new MainWindow { DataContext = viewModel };
         try
         {
             window.Show();
             window.UpdateLayout();
 
-            Border sidebar = window.GetVisualDescendants().OfType<Border>()
-                .Single(border => border.Name == "Sidebar");
-            HomeView home = window.GetVisualDescendants().OfType<HomeView>().Single();
-            Assert.Equal(Color.Parse("#F6F7FC"), Assert.IsAssignableFrom<ISolidColorBrush>(sidebar.Background).Color);
-            Assert.Equal(Color.Parse("#F8FAFE"), Assert.IsAssignableFrom<ISolidColorBrush>(home.Background).Color);
+            var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            var label = workspaceTab.GetVisualDescendants().OfType<TextBlock>()
+                .Single(text => text.Text is "主页" or "收藏" or "设置");
+            var icon = workspaceTab.GetVisualDescendants().OfType<Optris.Icons.Avalonia.Icon>().Single();
+            Assert.Equal("主页", label.Text);
+            Assert.Equal("fa-solid fa-house", icon.Value);
+            Assert.True(workspaceTab.IsChecked);
 
-            Button homeTab = window.GetVisualDescendants().OfType<Button>()
-                .Single(button => button.Name == "HomeTopTab");
-            Assert.Equal(Color.Parse("#F0F2F8"), Assert.IsAssignableFrom<ISolidColorBrush>(homeTab.Background).Color);
-            Point homeTabCenter = homeTab.TranslatePoint(
-                new Point(homeTab.Bounds.Width / 2, homeTab.Bounds.Height / 2), window)!.Value;
-            window.MouseMove(homeTabCenter);
-            Assert.Equal(Color.Parse("#E4E7F0"), Assert.IsAssignableFrom<ISolidColorBrush>(homeTab.Background).Color);
-            Avalonia.Controls.Presenters.ContentPresenter homeTabSurface = homeTab.GetVisualChildren()
-                .OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single();
-            Assert.Equal(
-                Color.Parse("#E4E7F0"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(homeTabSurface.Background).Color);
+            // One fixed tab only: favorites/settings must not append new tabs.
+            Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
+                .OfType<Avalonia.Controls.Primitives.ToggleButton>());
 
-            Button documentTab = window.GetVisualDescendants().OfType<Button>()
-                .Single(button => button.Name == "TabSelectButton" && ReferenceEquals(button.DataContext, second));
-            Assert.Equal(36, homeTab.Bounds.Height, precision: 1);
-            Assert.Equal(36, documentTab.Bounds.Height, precision: 1);
-            Assert.Equal(new CornerRadius(10), homeTab.CornerRadius);
-            Assert.Equal(homeTab.CornerRadius, documentTab.CornerRadius);
-            Border documentTabSurface = documentTab.GetVisualChildren().OfType<Border>().Single();
-            Assert.Equal(
-                Color.Parse("#F0F2F8"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(documentTab.Background).Color);
-            Assert.Equal(
-                Color.Parse("#F0F2F8"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(documentTabSurface.Background).Color);
-            Point documentTabCenter = documentTab.TranslatePoint(
-                new Point(documentTab.Bounds.Width / 2, documentTab.Bounds.Height / 2), window)!.Value;
-            window.MouseMove(documentTabCenter);
-            Assert.Equal(
-                Color.Parse("#E4E7F0"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(documentTab.Background).Color);
-            Assert.Equal(
-                Color.Parse("#E4E7F0"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(documentTabSurface.Background).Color);
+            viewModel.ShowSettingsCommand.Execute(null);
+            window.UpdateLayout();
+            Assert.Equal("设置", label.Text);
+            Assert.Equal("fa-solid fa-gear", icon.Value);
+            Assert.True(workspaceTab.IsChecked);
+            Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
+                .OfType<Avalonia.Controls.Primitives.ToggleButton>());
 
-            Border[] pdfIcons = window.GetVisualDescendants().OfType<Border>()
-                .Where(border => border.Name is "SidebarAppIcon" or "DocumentTabIcon").ToArray();
-            Assert.Equal(3, pdfIcons.Length);
-            Assert.All(pdfIcons, icon =>
-            {
-                var gradient = Assert.IsType<LinearGradientBrush>(icon.Background);
-                Assert.Equal(new Point(0, 1), gradient.StartPoint.Point);
-                Assert.Equal(new Point(1, 0), gradient.EndPoint.Point);
-                Assert.Equal(
-                    new[] { Color.Parse("#835EF6"), Color.Parse("#566BF5") },
-                    gradient.GradientStops.Select(stop => stop.Color));
-            });
+            viewModel.ShowFavoritesCommand.Execute(null);
+            window.UpdateLayout();
+            Assert.Equal("收藏", label.Text);
+            Assert.Equal("fa-solid fa-star", icon.Value);
+            Assert.True(workspaceTab.IsChecked);
+            Assert.Single(workspaceTab.GetVisualParent()!.GetVisualDescendants()
+                .OfType<Avalonia.Controls.Primitives.ToggleButton>());
 
-            Border documentIcon = pdfIcons.Single(icon =>
-                icon.Name == "DocumentTabIcon" && ReferenceEquals(icon.DataContext, second));
-            Assert.Equal(22, documentIcon.Bounds.Width, precision: 1);
-            Assert.Equal(22, documentIcon.Bounds.Height, precision: 1);
+            viewModel.ShowHomeCommand.Execute(null);
+            window.UpdateLayout();
+            Assert.Equal("主页", label.Text);
+            Assert.Equal("fa-solid fa-house", icon.Value);
         }
-        finally
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ClickingTheActiveWorkspaceTabDoesNothingAndKeepsTheBindingAlive()
+    {
+        using var viewModel = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("document.pdf", service);
+        viewModel.OpenDocuments.Add(document);
+        var window = new MainWindow { DataContext = viewModel };
+        try
         {
-            window.Close();
+            window.Show();
+            window.UpdateLayout();
+            viewModel.ShowSettingsCommand.Execute(null);
+            window.UpdateLayout();
+            var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            Assert.True(workspaceTab.IsChecked);
+
+            Click(window, workspaceTab);
+            window.UpdateLayout();
+
+            Assert.True(viewModel.IsSettingsSelected);
+            Assert.False(viewModel.IsHomeSelected);
+            Assert.True(workspaceTab.IsChecked);
+            Assert.True(workspaceTab.GetVisualDescendants()
+                .OfType<pdf_fluent.Controls.EdgeTabChrome>().Single().IsActive);
+
+            viewModel.SelectedDocument = document;
+            window.UpdateLayout();
+            Assert.False(workspaceTab.IsChecked);
         }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ClickingTheInactiveWorkspaceTabFromADocumentReturnsHome()
+    {
+        using var viewModel = new MainViewModel();
+        using var service = new FakePdfDocumentService(1);
+        var document = new DocumentTabViewModel("document.pdf", service);
+        viewModel.OpenDocuments.Add(document);
+        viewModel.SelectedDocument = document;
+        var window = new MainWindow { DataContext = viewModel };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            Assert.False(workspaceTab.IsChecked);
+
+            Click(window, workspaceTab);
+            window.UpdateLayout();
+
+            Assert.True(viewModel.IsHomeSelected);
+            Assert.Null(viewModel.SelectedDocument);
+            Assert.True(workspaceTab.IsChecked);
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]
@@ -153,7 +231,7 @@ public sealed class MainWindowTests
 
             window.MouseMove(hoverPoint);
             Assert.Equal(
-                Color.Parse("#E4E7F0"),
+                Color.Parse("#DDE3ED"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(tabButton.Background).Color);
 
             Point closeCenter = closeButton.TranslatePoint(
@@ -174,12 +252,11 @@ public sealed class MainWindowTests
 
             Assert.Same(second, viewModel.SelectedDocument);
             Assert.Equal(2, viewModel.OpenDocuments.Count);
-            Assert.Equal(36, tabButton.Bounds.Height, precision: 1);
+            Assert.Equal(40, tabButton.Bounds.Height, precision: 1);
             Assert.True(tabButton.Bounds.Height > closeButton.Bounds.Height);
-            Assert.Equal(new CornerRadius(10), tabButton.CornerRadius);
-            Border hoverSurface = tabButton.GetVisualDescendants().OfType<Border>().First();
-            Assert.Equal(new CornerRadius(10), hoverSurface.CornerRadius);
-            Assert.True(hoverSurface.ClipToBounds);
+            var tabChrome = tabButton.GetVisualDescendants().OfType<pdf_fluent.Controls.EdgeTabChrome>().Single();
+            Assert.True(tabChrome.IsActive);
+            Assert.False(tabChrome.IsHitTestVisible);
             Assert.True(tabButton.GetVisualAncestors().OfType<Border>().First().ClipToBounds);
         }
         finally
@@ -211,8 +288,10 @@ public sealed class MainWindowTests
             Assert.Single(window.GetVisualDescendants().OfType<SettingsView>(), view => view.IsVisible);
             Assert.True(window.GetVisualDescendants().OfType<Border>()
                 .Single(border => border.Name == "SettingsSelectionIndicator").IsVisible);
-            Assert.True(window.GetVisualDescendants().OfType<Button>()
-                .Single(button => button.Name == "SettingsTopTab").IsVisible);
+            var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;
+            Assert.True(workspaceTab.IsVisible);
+            Assert.True(workspaceTab.IsChecked);
+            Assert.Contains(workspaceTab.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "设置");
             Assert.False(window.GetVisualDescendants().OfType<HomeView>().Single().IsVisible);
 
             viewModel.ShowHomeCommand.Execute(null);

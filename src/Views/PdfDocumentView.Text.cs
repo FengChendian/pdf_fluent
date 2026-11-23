@@ -41,8 +41,8 @@ public partial class PdfDocumentView
         deleteItem.Click += OnDeleteHighlightClick;
         _highlightContextMenu = new UnselectedMenuFlyout
         {
-            FlyoutPresenterTheme = (ControlTheme)Resources["MoreActionsMenuPresenterTheme"]!,
-            ItemContainerTheme = (ControlTheme)Resources["MoreActionsMenuItemTheme"]!,
+            FlyoutPresenterTheme = this.FindResource("MoreActionsMenuPresenterTheme") as ControlTheme,
+            ItemContainerTheme = this.FindResource("MoreActionsMenuItemTheme") as ControlTheme,
         };
         _highlightContextMenu.Items.Add(deleteItem);
         AddHandler(PointerPressedEvent, OnTextPointerPressed, RoutingStrategies.Tunnel);

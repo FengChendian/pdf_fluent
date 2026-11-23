@@ -17,35 +17,15 @@
         WindowDecorations="Full"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
-        <LinearGradientBrush x:Key="PdfIconGradientBrush" StartPoint="0%,100%" EndPoint="100%,0%">
-            <GradientStop Color="#835EF6" Offset="0" />
-            <GradientStop Color="#566BF5" Offset="1" />
-        </LinearGradientBrush>
-        <ControlTheme x:Key="MoreActionsMenuPresenterTheme" TargetType="MenuFlyoutPresenter"
-                      BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
-            <Setter Property="MinWidth" Value="172" />
-            <Setter Property="Padding" Value="0,4" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="#E4E7EF" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="12" />
-        </ControlTheme>
-        <ControlTheme x:Key="MoreActionsMenuItemTheme" TargetType="MenuItem"
-                      BasedOn="{StaticResource {x:Type MenuItem}}">
-            <Setter Property="Margin" Value="4,0" />
-            <Setter Property="Padding" Value="10,9" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#51596D" />
-            <Setter Property="FontSize" Value="12" />
-            <Style Selector="^:pointerover">
-                <Setter Property="Background" Value="#F0F3F9" />
-                <Setter Property="Foreground" Value="#424758" />
-            </Style>
-            <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
-                <Setter Property="Background" Value="#F0F3F9" />
-            </Style>
-        </ControlTheme>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://pdf_fluent/Themes/WorkspaceResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <LinearGradientBrush x:Key="PdfIconGradientBrush" StartPoint="0%,100%" EndPoint="100%,0%">
+                <GradientStop Color="#835EF6" Offset="0" />
+                <GradientStop Color="#566BF5" Offset="1" />
+            </LinearGradientBrush>
+        </ResourceDictionary>
     </Window.Resources>
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SelectedDocument.SaveHighlightsCommand}" />
@@ -89,44 +69,6 @@
         <Style Selector="Button.more-actions-button:pointerover">
             <Setter Property="Background" Value="#F0F3F9" />
         </Style>
-        <Style Selector="ToggleButton.top-tab">
-            <Setter Property="Height" Value="36" />
-            <Setter Property="Padding" Value="14,0" />
-            <Setter Property="Background" Value="#F0F2F8" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Foreground" Value="#777E91" />
-            <Setter Property="Cursor" Value="Hand" />
-        </Style>
-        <Style Selector="ToggleButton.top-tab:pointerover">
-            <Setter Property="Background" Value="#E4E7F0" />
-        </Style>
-        <Style Selector="ToggleButton.top-tab.selected">
-            <Setter Property="Background" Value="#F0F1FF" />
-            <Setter Property="Foreground" Value="#625BE7" />
-        </Style>
-        <Style Selector="ToggleButton.tab-select">
-            <Setter Property="Background" Value="#F0F2F8" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Background="{TemplateBinding Background}"
-                            CornerRadius="{TemplateBinding CornerRadius}"
-                            ClipToBounds="True">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          Padding="{TemplateBinding Padding}"
-                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="ToggleButton.tab-select:checked">
-            <Setter Property="Background" Value="#F0F1FF" />
-        </Style>
-        <Style Selector="ToggleButton.tab-select:pointerover">
-            <Setter Property="Background" Value="#E4E7F0" />
-        </Style>
         <Style Selector="Button.tab-close">
             <Setter Property="Width" Value="26" />
             <Setter Property="Height" Value="26" />
@@ -142,11 +84,8 @@
             <Setter Property="Background" Value="#E9EBF2" />
             <Setter Property="Foreground" Value="#555D73" />
         </Style>
-        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F3F9" />
-        </Style>
-        <Style Selector="ToggleButton.top-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#E4E7F0" />
         </Style>
         <Style Selector="Button.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.nav-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F2F8" />
@@ -161,16 +100,12 @@
             <Setter Property="Background" Value="#ECEEFF" />
             <Setter Property="Foreground" Value="#625BE7" />
         </Style>
-        <Style Selector="ToggleButton.top-tab.selected /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.top-tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#F0F1FF" />
-            <Setter Property="Foreground" Value="#625BE7" />
-        </Style>
     </Window.Styles>
 
-    <Grid ColumnDefinitions="72,*" RowDefinitions="56,*">
-        <Border x:Name="Sidebar" Grid.Row="0" Grid.RowSpan="2" Background="#F6F7FC" BorderBrush="#F0F1F5" BorderThickness="0,0,1,0">
+    <Grid ColumnDefinitions="72,*" RowDefinitions="48,*,Auto" UseLayoutRounding="True">
+        <Border Grid.Row="0" Grid.RowSpan="3" Background="#F6F7FC" BorderBrush="#F0F1F5" BorderThickness="0,0,1,0">
             <Grid RowDefinitions="Auto,*,Auto" Margin="0,12,0,18">
-                <Border x:Name="SidebarAppIcon" Width="40" Height="40" CornerRadius="13" HorizontalAlignment="Center"
+                <Border Width="40" Height="40" CornerRadius="13" HorizontalAlignment="Center"
                         Background="{StaticResource PdfIconGradientBrush}">
                     <TextBlock Text="P" FontSize="21" FontWeight="Bold" Foreground="#FFFFFF"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -195,7 +130,7 @@
                         <Border Width="3" Height="22" CornerRadius="1.5" Background="#6C5CE7"
                                 HorizontalAlignment="Left" Margin="6.5,0,6.5,0" VerticalAlignment="Center"
                                 IsVisible="{Binding IsFavoritesSelected}" />
-                        <ToggleButton x:Name="FavoritesNavButton" Classes="nav-button" Classes.selected="{Binding IsFavoritesSelected}"
+                        <ToggleButton Classes="nav-button" Classes.selected="{Binding IsFavoritesSelected}"
                                       Command="{Binding ShowFavoritesCommand}"
                                       IsChecked="{Binding IsFavoritesSelected, Mode=OneWay}" ToolTip.Tip="收藏">
                             <Grid>
@@ -226,35 +161,25 @@
             </Grid>
         </Border>
 
-        <Border x:Name="TopBar" Grid.Row="0" Grid.Column="1" Background="#F8FAFE" BorderBrush="#F0F1F5" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="14,0,16,0">
-                <ToggleButton x:Name="HomeTopTab" Classes="top-tab" Classes.selected="{Binding IsHomeSelected}"
-                              Command="{Binding ShowHomeCommand}"
-                              IsChecked="{Binding IsHomeSelected, Mode=OneWay}">
+        <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource WorkspaceStripBrush}" ClipToBounds="True">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="6,0,10,0">
+                <ToggleButton x:Name="WorkspaceTopTab" Theme="{StaticResource EdgeTabTheme}"
+                              Click="OnWorkspaceTabClick"
+                              IsChecked="{Binding IsWorkspaceTabSelected, Mode=OneWay}"
+                              ToolTip.Tip="{Binding WorkspaceTabTitle}">
                     <StackPanel Orientation="Horizontal" Spacing="7">
-                        <i:Icon Value="fa-solid fa-house" FontSize="13"
-                                Foreground="{Binding $parent[ToggleButton].Foreground}" />
-                        <TextBlock Text="主页" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+                        <i:Icon Value="{Binding WorkspaceTabIcon}" FontSize="13" />
+                        <TextBlock Text="{Binding WorkspaceTabTitle}" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                 </ToggleButton>
-                <ToggleButton x:Name="SettingsTopTab" Classes="top-tab"
-                              Classes.selected="{Binding IsSettingsSelected}"
-                              Command="{Binding ShowSettingsCommand}"
-                              IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                              IsVisible="{Binding IsSettingsOpen}">
-                    <StackPanel Orientation="Horizontal" Spacing="7">
-                        <i:Icon Value="fa-solid fa-gear" FontSize="13"
-                                Foreground="{Binding $parent[ToggleButton].Foreground}" />
-                        <TextBlock Text="设置" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-                    </StackPanel>
-                </ToggleButton>
-                <Button Grid.Column="1" Classes="plain-button" Width="34" Height="34" Margin="4,0,4,0"
-                        Padding="0" CornerRadius="10" Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
-                    <i:Icon Value="fa-solid fa-plus" FontSize="13" Foreground="#9197A8" />
+                <Button x:Name="ScrollTabsLeftButton" Grid.Column="1" Classes="plain-button" Width="28" Height="32"
+                        IsVisible="False" Padding="0" CornerRadius="8" Click="OnScrollTabsLeft" ToolTip.Tip="向左滚动标签">
+                    <i:Icon Value="fa-solid fa-chevron-left" FontSize="11" />
                 </Button>
-
-                <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                    <ItemsControl ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Center">
+                <ScrollViewer x:Name="DocumentTabScroller" Grid.Column="2" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              ScrollChanged="OnTabScrollChanged" SizeChanged="OnTabStripSizeChanged">
+                    <ItemsControl x:Name="DocumentTabs" ItemsSource="{Binding OpenDocuments}" VerticalAlignment="Bottom"
+                                  ContainerPrepared="OnTabContainerPrepared">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal" />
@@ -262,28 +187,28 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:DocumentTabViewModel">
-                                <Border Width="200" Height="36" Margin="4,4,0,4" Background="Transparent"
-                                        CornerRadius="10" ClipToBounds="True" x:CompileBindings="False">
+                                <Border Width="{Binding $parent[Window].DocumentTabWidth}" Height="40" Background="Transparent"
+                                        ClipToBounds="True" x:CompileBindings="False">
                                     <Grid>
-                                        <ToggleButton x:Name="TabSelectButton" Classes="tab-select"
+                                        <ToggleButton x:Name="TabSelectButton" Theme="{StaticResource EdgeTabTheme}"
                                                       Command="{Binding $parent[Window].DataContext.SelectDocumentCommand}"
                                                       CommandParameter="{Binding}"
                                                       IsChecked="{Binding IsSelected, Mode=OneWay}"
-                                                      BorderThickness="0" Padding="12,0,38,0" Cursor="Hand"
+                                                      BorderThickness="0" Padding="22,0,46,0" Cursor="Hand"
                                                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                                       HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Border x:Name="DocumentTabIcon" Width="22" Height="22"
+                                            <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
+                                                <Border Width="22" Height="22"
                                                         Background="{StaticResource PdfIconGradientBrush}" CornerRadius="6">
                                                     <TextBlock Text="P" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 </Border>
-                                                <TextBlock Text="{Binding DisplayFileName}" FontSize="12" Foreground="#51586B"
-                                                           TextTrimming="CharacterEllipsis" MaxWidth="128"
+                                                <TextBlock Grid.Column="1" Text="{Binding DisplayFileName}" FontSize="12" Foreground="#51586B"
+                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayFileName}"
                                                            VerticalAlignment="Center" />
-                                            </StackPanel>
+                                            </Grid>
                                         </ToggleButton>
-                                        <Button Classes="tab-close" Margin="0,0,7,0" HorizontalAlignment="Right"
+                                        <Button Classes="tab-close" Margin="0,0,17,0" HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding $parent[Window].DataContext.CloseDocumentCommand}"
                                                 CommandParameter="{Binding}" ToolTip.Tip="关闭">
@@ -296,7 +221,12 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <Grid Grid.Column="3" Width="340" Margin="14,0,10,0" VerticalAlignment="Center"
+                <Button x:Name="ScrollTabsRightButton" Grid.Column="3" Classes="plain-button" Width="28" Height="32"
+                        IsVisible="False" Padding="0" CornerRadius="8" Click="OnScrollTabsRight" ToolTip.Tip="向右滚动标签">
+                    <i:Icon Value="fa-solid fa-chevron-right" FontSize="11" />
+                </Button>
+
+                <Grid Grid.Column="4" Width="340" Margin="12,0,6,0" VerticalAlignment="Center"
                       IsVisible="{Binding IsHomeSelected}">
                     <TextBox x:Name="DocumentSearchBox" Text="{Binding SearchText}" PlaceholderText="搜索文档…"
                              Height="34" Padding="34,0,12,0" FontSize="12" CornerRadius="10"
@@ -305,7 +235,11 @@
                             Margin="12,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False" />
                 </Grid>
 
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8">
+                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Classes="plain-button" Width="34" Height="34" Padding="0" CornerRadius="8"
+                            Command="{Binding OpenPdfCommand}" ToolTip.Tip="打开新的 PDF">
+                        <i:Icon Value="fa-solid fa-plus" FontSize="13" Foreground="#9197A8" />
+                    </Button>
                     <ProgressBar Width="56" Height="4" IsIndeterminate="True"
                                  IsVisible="{Binding IsOpening}" Foreground="#6C5CE7" />
                     <Button x:Name="MoreActionsButton" Classes="more-actions-button" Width="34" Height="34" Padding="0"
@@ -325,7 +259,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Grid.Column="1">
+        <Grid x:Name="WorkspaceContent" Grid.Row="1" Grid.Column="1" ClipToBounds="True" Background="{DynamicResource WorkspaceSurfaceBrush}">
             <views:HomeView IsVisible="{Binding IsLibraryOpen}" />
             <views:SettingsView IsVisible="{Binding IsSettingsOpen}" />
             <ContentControl Content="{Binding SelectedDocument}" IsVisible="{Binding IsDocumentOpen}">
@@ -337,8 +271,8 @@
             </ContentControl>
         </Grid>
 
-        <Border Grid.Row="1" Grid.Column="1" Background="#F0FFFFFF" CornerRadius="12"
-                Padding="14,9" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,18"
+        <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource WorkspaceSurfaceBrush}"
+                BorderBrush="{DynamicResource WorkspaceBorderBrush}" BorderThickness="0,1,0,0" Padding="20,6"
                 IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
             <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#666E82" />
         </Border>

@@ -1,3 +1,8 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using pdf_fluent.ViewModels;
 using Xunit;
 
@@ -26,5 +31,18 @@ internal static class PdfTestHelpers
             if (DateTime.UtcNow >= deadline) throw new TimeoutException("等待异步操作完成超时。");
             await Task.Delay(10);
         }
+    }
+
+    public static T Named<T>(Visual root, string name) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+
+    public static Point Center(Control control, Visual relativeTo) =>
+        control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), relativeTo)!.Value;
+
+    public static void Click(Window window, Control control)
+    {
+        Point center = Center(control, window);
+        window.MouseDown(center, MouseButton.Left);
+        window.MouseUp(center, MouseButton.Left);
     }
 }

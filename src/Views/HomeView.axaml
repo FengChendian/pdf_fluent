@@ -4,9 +4,13 @@
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="pdf_fluent.Views.HomeView"
              x:DataType="vm:MainViewModel"
-             Background="#F8FAFE">
+             Background="{DynamicResource WorkspaceSurfaceBrush}">
     <UserControl.Resources>
-        <DataTemplate x:Key="DocumentCardTemplate" DataType="vm:RecentDocumentViewModel">
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://pdf_fluent/Themes/WorkspaceResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <DataTemplate x:Key="DocumentCardTemplate" DataType="vm:RecentDocumentViewModel">
             <Button Classes="recent-card" Width="196" x:CompileBindings="False"
                     Command="{Binding $parent[Window].DataContext.OpenRecentCommand}"
                     CommandParameter="{Binding}">
@@ -17,7 +21,7 @@
                                   Command="{Binding RemoveCommand}" CommandParameter="{Binding}" />
                     </ContextMenu>
                 </Button.ContextMenu>
-                <Border Classes="card-surface" Width="196" Background="#FFFFFF"
+                <Border Width="196" Background="#FFFFFF"
                         BorderBrush="{Binding $parent[Button].BorderBrush}" BorderThickness="1"
                         CornerRadius="15" Padding="8">
                     <StackPanel Spacing="10">
@@ -47,6 +51,7 @@
                 </Border>
             </Button>
         </DataTemplate>
+        </ResourceDictionary>
     </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Button.plain-button">
@@ -65,8 +70,7 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <ContentPresenter x:Name="QuickCardContent"
-                                      Content="{TemplateBinding Content}"
+                    <ContentPresenter Content="{TemplateBinding Content}"
                                       Background="Transparent" />
                 </ControlTemplate>
             </Setter>
@@ -83,8 +87,7 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <ContentPresenter x:Name="RecentCardContent"
-                                      Content="{TemplateBinding Content}"
+                    <ContentPresenter Content="{TemplateBinding Content}"
                                       Background="Transparent" />
                 </ControlTemplate>
             </Setter>

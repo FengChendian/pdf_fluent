@@ -95,6 +95,7 @@ public sealed class ReadingPositionTests
             {
                 FilePath = filePath,
                 ScrollOffsetY = savedOffset,
+                ScrollLayoutVersion = 1,
                 LastOpened = DateTimeOffset.Now,
             },
         ]);

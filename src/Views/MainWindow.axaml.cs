@@ -23,6 +23,7 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DropEvent, OnDrop);
         DataContextChanged += (_, _) =>
         {
+            AttachTabViewModel();
             if (DataContext is MainViewModel viewModel)
             {
                 viewModel.PdfFilePicker = PickPdfFileAsync;
@@ -30,6 +31,8 @@ public partial class MainWindow : Window
             }
         };
         Closing += OnWindowClosing;
+        AddHandler(KeyDownEvent, OnWorkspaceKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        Closed += (_, _) => DetachTabViewModel();
         Closed += (_, _) => (DataContext as MainViewModel)?.Dispose();
         Opened += (_, _) => StartupTrace.Mark("MainWindow.Opened");
         LayoutUpdated += OnFirstLayoutUpdated;

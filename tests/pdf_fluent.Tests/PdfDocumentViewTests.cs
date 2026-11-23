@@ -7,6 +7,8 @@ using Avalonia.VisualTree;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
+using static pdf_fluent.Tests.PdfTestHelpers;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace pdf_fluent.Tests;
 
@@ -122,40 +124,31 @@ public sealed class PdfDocumentViewTests
     }
 
     [AvaloniaFact]
-    public async Task ReaderOverlaysHaveThinBordersAndFullyRoundedEnds()
+    public async Task ReaderChromeUsesAContinuousSurfaceAndSeparateViewport()
     {
-        using var service = new FakePdfDocumentService(pageCount: 1);
+        using var service = new FakePdfDocumentService(3);
         using var document = new DocumentTabViewModel("unused.pdf", service);
         await document.LoadAsync();
         var view = new PdfDocumentView { DataContext = document };
-        var window = new Window { Width = 1200, Height = 900, Content = view };
-
+        var window = new Window { Width = 968, Height = 652, Content = view };
         try
         {
-            window.Show();
+            window.Show(); window.UpdateLayout();
+            var header = Named<Border>(view, "ReaderHeader");
+            var viewport = Named<Grid>(view, "DocumentViewport");
+            Assert.Equal(56, header.Bounds.Height);
+            Assert.Equal(new Thickness(0, 0, 0, 1), header.BorderThickness);
+            Assert.Equal(Avalonia.Media.Colors.White, Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(header.Background).Color);
+            Assert.Equal(header.Bounds.Bottom, viewport.TranslatePoint(default, view)!.Value.Y);
+            Assert.True(viewport.ClipToBounds);
+            var toolbar = Named<Border>(view, "ReaderToolbar");
+            var navigation = Named<Border>(view, "PageNavigation");
+            Assert.True(toolbar.TranslatePoint(new Point(toolbar.Bounds.Width, 0), view)!.Value.X <= navigation.TranslatePoint(default, view)!.Value.X);
+            view.DocumentScroller.Offset = new Vector(0, 900);
             window.UpdateLayout();
-
-            Border[] overlays = view.GetVisualDescendants().OfType<Border>()
-                .Where(border => border.Name is "ReaderToolbar" or "PageNavigation" or "PageIndicatorOverlay")
-                .ToArray();
-            Assert.Equal(3, overlays.Length);
-            Assert.All(overlays, overlay =>
-            {
-                Assert.Equal(new Thickness(1), overlay.BorderThickness);
-                Assert.Equal(
-                    Avalonia.Media.Color.Parse("#DDE2EC"),
-                    Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(overlay.BorderBrush).Color);
-            });
-            Assert.All(overlays.Where(overlay => overlay.Name != "PageIndicatorOverlay"), overlay =>
-                Assert.True(overlay.CornerRadius.TopLeft >= overlay.Bounds.Height / 2));
-            Assert.Equal(
-                new CornerRadius(16),
-                overlays.Single(overlay => overlay.Name == "PageIndicatorOverlay").CornerRadius);
+            Assert.Equal(56, viewport.TranslatePoint(default, view)!.Value.Y);
         }
-        finally
-        {
-            window.Close();
-        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]
@@ -189,38 +182,32 @@ public sealed class PdfDocumentViewTests
     }
 
     [AvaloniaFact]
-    public async Task FloatingPageIndicatorIsBottomRightAndRightAlignedWithPageNavigation()
+    public async Task FloatingPageIndicatorSitsBottomRightWithoutChangingTheViewport()
     {
-        using var service = new FakePdfDocumentService(pageCount: 3);
+        using var service = new FakePdfDocumentService(3);
         using var document = new DocumentTabViewModel("unused.pdf", service);
         await document.LoadAsync();
         var view = new PdfDocumentView { DataContext = document };
         var window = new Window { Width = 1200, Height = 900, Content = view };
-
         try
         {
-            window.Show();
-            view.ShowPageIndicator();
-            window.UpdateLayout();
-            Border navigation = view.GetVisualDescendants().OfType<Border>()
-                .Single(border => border.Name == "PageNavigation");
-            Border indicator = view.GetVisualDescendants().OfType<Border>()
-                .Single(border => border.Name == "PageIndicatorOverlay");
-            Point navigationTopRight = navigation.TranslatePoint(
-                new Point(navigation.Bounds.Width, 0), view)!.Value;
-            Point indicatorBottomRight = indicator.TranslatePoint(
+            window.Show(); window.UpdateLayout();
+            Size before = view.DocumentScroller.Viewport;
+            view.ShowPageIndicator(); window.UpdateLayout();
+            var indicator = Named<Border>(view, "PageIndicatorOverlay");
+            Point bottomRight = indicator.TranslatePoint(
                 new Point(indicator.Bounds.Width, indicator.Bounds.Height), view)!.Value;
-
-            Assert.Equal(navigationTopRight.X, indicatorBottomRight.X, precision: 1);
-            Assert.Equal(16, navigationTopRight.Y, precision: 1);
-            Assert.Equal(view.Bounds.Width - 20, navigationTopRight.X, precision: 1);
-            Assert.Equal(view.Bounds.Height - 20, indicatorBottomRight.Y, precision: 1);
-            Assert.True(indicatorBottomRight.Y > view.Bounds.Height / 2);
+            Assert.True(indicator.IsVisible);
+            Assert.Equal(16, indicator.CornerRadius.TopLeft);
+            Assert.Equal(view.Bounds.Width - 20, bottomRight.X, precision: 1);
+            Assert.Equal(view.Bounds.Height - 20, bottomRight.Y, precision: 1);
+            Assert.True(bottomRight.Y > view.Bounds.Height / 2);
+            Assert.Equal(before, view.DocumentScroller.Viewport);
+            view.HidePageIndicator(); window.UpdateLayout();
+            Assert.Equal(before, view.DocumentScroller.Viewport);
+            Assert.False(view.IsPageIndicatorVisible);
         }
-        finally
-        {
-            window.Close();
-        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]
@@ -664,66 +651,73 @@ public sealed class PdfDocumentViewTests
     }
 
     [AvaloniaFact]
-    public async Task PageJumpPanelUsesTheTocPointerCurveAndAlignsWithThePageIndicator()
+    public async Task TocAndPageJumpPanelsShareTheSameTopOffset()
     {
-        using var service = new FakePdfDocumentService(pageCount: 3);
+        using var service = new FakePdfDocumentService(3);
         using var document = new DocumentTabViewModel("unused.pdf", service);
         await document.LoadAsync();
         var view = new PdfDocumentView { DataContext = document };
         var window = new Window { Width = 1200, Height = 900, Content = view };
-
         try
         {
-            window.Show();
+            window.Show(); window.UpdateLayout();
+            double headerBottom = Named<Border>(view, "ReaderHeader")
+                .TranslatePoint(new Point(0, Named<Border>(view, "ReaderHeader").Bounds.Height), view)!.Value.Y;
+            Assert.Equal(56, headerBottom, precision: 1);
+
+            var tocButton = Named<Avalonia.Controls.Primitives.ToggleButton>(view, "TableOfContentsButton");
+            tocButton.IsChecked = true;
             window.UpdateLayout();
+            await Task.Delay(260);
+            window.UpdateLayout();
+            Assert.Equal(headerBottom,
+                Named<Border>(view, "TableOfContentsPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
+            Assert.Equal(headerBottom - 8,
+                Named<Path>(view, "TableOfContentsPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
+
+            tocButton.IsChecked = false;
+            window.UpdateLayout();
+            await Task.Delay(260);
             Click(window, Named<TextBlock>(view, "PageIndicatorText"));
             window.UpdateLayout();
+            Assert.Equal(headerBottom,
+                Named<Border>(view, "PageJumpPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
+            Assert.Equal(headerBottom - 8,
+                Named<Path>(view, "PageJumpPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
+        }
+        finally { window.Close(); }
+    }
 
-            Grid overlay = Named<Grid>(view, "PageJumpOverlay");
-            Border navigation = Named<Border>(view, "PageNavigation");
-            Border panel = Named<Border>(view, "PageJumpPanel");
-            var pointer = Named<Avalonia.Controls.Shapes.Path>(view, "PageJumpPointer");
-            var pointerFill = Named<Avalonia.Controls.Shapes.Path>(view, "PageJumpPointerFill");
-            var tocPointer = Named<Avalonia.Controls.Shapes.Path>(view, "TableOfContentsPointer");
-            var tocPointerFill = Named<Avalonia.Controls.Shapes.Path>(view, "TableOfContentsPointerFill");
+    [AvaloniaFact]
+    public async Task PageJumpPanelUsesTheBezierPointerAndFloatsOverThePage()
+    {
+        using var service = new FakePdfDocumentService(3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            window.Show(); window.UpdateLayout();
+            Click(window, Named<TextBlock>(view, "PageIndicatorText"));
+            window.UpdateLayout();
+            var overlay = Named<Grid>(view, "PageJumpOverlay");
+            var navigation = Named<Border>(view, "PageNavigation");
+            var panel = Named<Border>(view, "PageJumpPanel");
+            var pointer = Named<Path>(view, "PageJumpPointer");
+            var pointerFill = Named<Path>(view, "PageJumpPointerFill");
+            var tocPointer = Named<Path>(view, "TableOfContentsPointer");
+            var tocPointerFill = Named<Path>(view, "TableOfContentsPointerFill");
             TextBlock indicator = Named<TextBlock>(view, "PageIndicatorText");
-            var jumpButton = Named<Avalonia.Controls.Primitives.ToggleButton>(view, "PageJumpButton");
             TextBox input = Named<TextBox>(view, "PageJumpTextBox");
             Button goToPage = Named<Button>(view, "GoToPageButton");
-            Border inputSurface = input.GetVisualDescendants().OfType<Border>().First();
-            TextBlock goToPageLabel = goToPage.GetVisualDescendants().OfType<TextBlock>()
-                .Single(text => text.Text == "跳转");
-            var jumpSurface = jumpButton.GetVisualChildren()
-                .OfType<Avalonia.Controls.Presenters.ContentPresenter>().Single();
-            var inputRow = Assert.IsAssignableFrom<Control>(input.GetVisualParent());
+            TextBlock error = Named<TextBlock>(view, "PageJumpError");
 
+            Assert.True(overlay.IsVisible);
             Assert.Equal(navigation.Bounds.Width, overlay.Bounds.Width, precision: 1);
-            Assert.Equal(new Thickness(0, 66, 20, 0), overlay.Margin);
+            Assert.Equal(new Thickness(0, 48, 16, 0), overlay.Margin);
             Assert.Equal(34, input.Bounds.Height);
             Assert.Equal(input.Bounds.Height, goToPage.Bounds.Height);
-            Assert.Equal(new Thickness(1), inputSurface.BorderThickness);
-            Assert.Equal(
-                Avalonia.Media.Color.Parse("#DDE2EC"),
-                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(inputSurface.BorderBrush).Color);
-            Assert.Equal(Avalonia.Media.TextAlignment.Center, input.TextAlignment);
-            Assert.Equal(
-                Avalonia.Media.Color.Parse("#DCEBFF"),
-                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(input.SelectionBrush).Color);
-            Assert.Equal(
-                Avalonia.Media.Color.Parse("#365E91"),
-                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(input.SelectionForegroundBrush).Color);
-            Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, goToPage.HorizontalContentAlignment);
-            Assert.Equal(Center(goToPage, window).X, Center(goToPageLabel, window).X, precision: 1);
-            Assert.Equal(Center(panel, window).X, Center(inputRow, window).X, precision: 1);
-            double inputRowTop = inputRow.TranslatePoint(new Point(0, 0), panel)!.Value.Y;
-            double inputRowBottom = inputRow.TranslatePoint(new Point(0, inputRow.Bounds.Height), panel)!.Value.Y;
-            Assert.Equal(12, inputRowTop, precision: 1);
-            Assert.Equal(inputRowTop, panel.Bounds.Height - inputRowBottom, precision: 1);
-            Assert.Equal(new CornerRadius(24), jumpButton.CornerRadius);
-            Assert.Equal(new CornerRadius(24), jumpSurface.CornerRadius);
-            Assert.Equal(
-                Avalonia.Media.Color.Parse("#F0EDFF"),
-                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(jumpSurface.Background).Color);
             Assert.Equal(new CornerRadius(12), panel.CornerRadius);
             Assert.Equal(new Thickness(1), panel.BorderThickness);
             Assert.Equal(
@@ -734,33 +728,70 @@ public sealed class PdfDocumentViewTests
                 Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(pointerFill.Fill).Color);
             Assert.Equal(tocPointer.Data?.ToString(), pointer.Data?.ToString());
             Assert.Equal(tocPointerFill.Data?.ToString(), pointerFill.Data?.ToString());
-            Assert.NotNull(pointer.Data);
-            Assert.NotNull(pointerFill.Data);
             Assert.Equal(Center(indicator, window).X, Center(pointer, window).X, precision: 1);
 
+            double panelTop = panel.TranslatePoint(new Point(0, 0), view)!.Value.Y;
+            Assert.Equal(56, panelTop, precision: 1);
             Point pointerStartInPanel = pointer.TranslatePoint(new Point(0, 8), panel)!.Value;
             Assert.Equal(0, pointerStartInPanel.Y, precision: 1);
             Assert.InRange(pointerStartInPanel.X, 0, panel.Bounds.Width - 20);
             double pointerBottom = pointer.TranslatePoint(new Point(0, pointer.Bounds.Height), view)!.Value.Y;
-            double panelTop = panel.TranslatePoint(new Point(0, 0), view)!.Value.Y;
             Assert.True(pointerBottom > panelTop);
+
+            input.Text = "999";
+            Click(window, goToPage);
+            window.UpdateLayout();
+            Assert.True(error.IsVisible);
+            double errorBottom = error.TranslatePoint(new Point(0, error.Bounds.Height), view)!.Value.Y;
+            double panelBottom = panel.TranslatePoint(new Point(0, panel.Bounds.Height), view)!.Value.Y;
+            Assert.Equal(panelBottom - 12, errorBottom, precision: 1);
+            input.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Source = input,
+                Key = Key.Escape,
+            });
+            window.UpdateLayout();
+            Assert.False(overlay.IsVisible);
         }
-        finally
-        {
-            window.Close();
-        }
+        finally { window.Close(); }
     }
 
-    private static T Named<T>(Visual root, string name) where T : Control =>
-        root.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
-
-    private static Point Center(Control control, Visual relativeTo) =>
-        control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), relativeTo)!.Value;
-
-    private static void Click(Window window, Control control)
+    [AvaloniaFact]
+    public async Task ReaderSearchFloatsOverThePageWithoutShrinkingTheViewport()
     {
-        Point center = Center(control, window);
-        window.MouseDown(center, MouseButton.Left);
-        window.MouseUp(center, MouseButton.Left);
+        using var service = new FakePdfDocumentService(3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        var view = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            window.Show(); window.UpdateLayout();
+            var viewport = Named<Grid>(view, "DocumentViewport");
+            var viewportOrigin = viewport.TranslatePoint(default, view)!.Value;
+            double viewportWidth = viewport.Bounds.Width;
+            Button search = Named<Button>(view, "SearchButton");
+            Click(window, search);
+            window.UpdateLayout();
+
+            Border panel = Named<Border>(view, "SearchPanel");
+            Assert.True(panel.IsVisible);
+            Assert.Equal(320, panel.Bounds.Width, precision: 1);
+            Assert.Equal(new CornerRadius(24), panel.CornerRadius);
+            Assert.Equal(new Thickness(1), panel.BorderThickness);
+            Assert.Equal(
+                Avalonia.Media.Colors.White,
+                Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(panel.Background).Color);
+            Assert.Equal(viewportOrigin, viewport.TranslatePoint(default, view)!.Value);
+            Assert.Equal(viewportWidth, viewport.Bounds.Width);
+            Assert.Equal(Avalonia.Layout.VerticalAlignment.Top, panel.VerticalAlignment);
+            Assert.True(panel.TranslatePoint(default, view)!.Value.X > viewportOrigin.X);
+
+            Click(window, Named<Button>(view, "CloseSearchButton"));
+            window.UpdateLayout();
+            Assert.False(panel.IsVisible);
+        }
+        finally { window.Close(); }
     }
 }

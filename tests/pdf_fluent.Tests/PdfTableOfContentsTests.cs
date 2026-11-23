@@ -12,6 +12,7 @@ using pdf_fluent.Models;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
+using static pdf_fluent.Tests.PdfTestHelpers;
 using Path = Avalonia.Controls.Shapes.Path;
 
 namespace pdf_fluent.Tests;
@@ -66,46 +67,29 @@ public sealed class PdfTableOfContentsTests
             ToggleButton button = Named<ToggleButton>(view, "TableOfContentsButton");
             Grid flyout = Named<Grid>(view, "TableOfContentsOverlay");
             Border toolbar = Named<Border>(view, "ReaderToolbar");
+            var viewport = Named<Grid>(view, "DocumentViewport");
+            Point viewportOrigin = viewport.TranslatePoint(default, view)!.Value;
+            double viewportWidth = viewport.Bounds.Width;
             Assert.True(button.IsEnabled);
             Assert.False(button.IsChecked);
             Assert.False(view.IsTableOfContentsVisible);
-            Assert.Equal(new CornerRadius(24), button.CornerRadius);
-            Assert.Equal(48, button.Bounds.Width);
-            Assert.Equal(toolbar.Bounds.Height, button.Bounds.Height);
-            Assert.Equal(button.Bounds.Width, button.Bounds.Height);
+            Assert.Equal(new CornerRadius(8), button.CornerRadius);
+            Assert.Equal(34, button.Bounds.Width);
+            Assert.Equal(button.Bounds.Height, toolbar.Bounds.Height);
             Assert.Equal(
-                Colors.White,
+                Colors.Transparent,
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
-            Assert.Equal(
-                Color.Parse("#DDE2EC"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(button.BorderBrush).Color);
-            Assert.Equal(new Thickness(1), button.BorderThickness);
-            Assert.DoesNotContain(
-                view.GetVisualDescendants().OfType<Border>(),
-                border => border.Name == "TableOfContentsButtonPill");
-            Assert.Equal(
-                Center(toolbar, window).Y,
-                Center(button, window).Y,
-                precision: 1);
 
             window.MouseMove(Center(button, window));
             Assert.Equal(
-                Color.Parse("#E8E3FF"),
+                Color.Parse("#F0F2F8"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
             ContentPresenter hoverSurface = button.GetVisualChildren()
                 .OfType<ContentPresenter>()
                 .Single();
             Assert.Equal(
-                Color.Parse("#E8E3FF"),
+                Color.Parse("#F0F2F8"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(hoverSurface.Background).Color);
-            Assert.Equal(
-                Color.Parse("#DDE2EC"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(hoverSurface.BorderBrush).Color);
-            Assert.Equal(new Thickness(1), hoverSurface.BorderThickness);
-            var hoverIcon = Assert.IsAssignableFrom<Optris.Icons.Avalonia.Icon>(button.Content);
-            Assert.Equal(
-                Color.Parse("#666D80"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(hoverIcon.Foreground).Color);
 
             Click(window, button);
             window.UpdateLayout();
@@ -114,6 +98,8 @@ public sealed class PdfTableOfContentsTests
             Assert.True(button.IsChecked);
             Assert.True(view.IsTableOfContentsVisible);
             Assert.Contains("open", flyout.Classes);
+            Assert.Equal(viewportOrigin, viewport.TranslatePoint(default, view)!.Value);
+            Assert.Equal(viewportWidth, viewport.Bounds.Width);
             Assert.Equal(
                 Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
@@ -124,30 +110,19 @@ public sealed class PdfTableOfContentsTests
                 Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.Background).Color);
             Assert.Equal(
-                Color.Parse("#DDE2EC"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.BorderBrush).Color);
-            Assert.Equal(new Thickness(1), buttonSurface.BorderThickness);
-            Assert.Equal(
                 Color.Parse("#6C5CE7"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Foreground).Color);
-            var icon = Assert.IsAssignableFrom<Optris.Icons.Avalonia.Icon>(button.Content);
-            Assert.Equal(
-                Color.Parse("#6C5CE7"),
-                Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
 
             window.MouseMove(new Point(500, 500));
             Assert.Equal(
-                Colors.White,
+                Color.Parse("#E8E3FF"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
-            Assert.Equal(
-                Colors.White,
-                Assert.IsAssignableFrom<ISolidColorBrush>(buttonSurface.Background).Color);
 
             await Task.Delay(240);
             window.UpdateLayout();
 
             Assert.Equal(1, flyout.Opacity);
-            Assert.Equal(new Thickness(0, 66, 0, 20), flyout.Margin);
+            Assert.Equal(new Thickness(0, 48, 0, 20), flyout.Margin);
             Assert.Equal(2, flyout.Transitions?.Count);
             Assert.Equal(
                 TimeSpan.FromMilliseconds(180),
@@ -162,7 +137,7 @@ public sealed class PdfTableOfContentsTests
             Path pointerFill = Named<Path>(view, "TableOfContentsPointerFill");
             Border panel = Named<Border>(view, "TableOfContentsPanel");
             Assert.Equal(Avalonia.Layout.VerticalAlignment.Stretch, flyout.VerticalAlignment);
-            Assert.Equal(view.Bounds.Height - 86, flyout.Bounds.Height, precision: 1);
+            Assert.Equal(view.Bounds.Height - 68, flyout.Bounds.Height, precision: 1);
             double panelBottom = panel.TranslatePoint(
                 new Point(0, panel.Bounds.Height), view)!.Value.Y;
             Assert.Equal(view.Bounds.Height - 20, panelBottom, precision: 1);
@@ -175,7 +150,7 @@ public sealed class PdfTableOfContentsTests
                 Colors.White,
                 Assert.IsAssignableFrom<ISolidColorBrush>(pointerFill.Fill).Color);
             Point pointerStart = pointer.TranslatePoint(new Point(0, 8), view)!.Value;
-            Point panelJoin = panel.TranslatePoint(new Point(34, 0), view)!.Value;
+            Point panelJoin = panel.TranslatePoint(new Point(23, 0), view)!.Value;
             Assert.Equal(panelJoin.X, pointerStart.X, precision: 1);
             Assert.Equal(panelJoin.Y, pointerStart.Y, precision: 1);
             Assert.True(pointer.Bounds.Bottom > panel.Bounds.Top);
@@ -190,7 +165,7 @@ public sealed class PdfTableOfContentsTests
             Assert.False(view.IsTableOfContentsVisible);
             window.MouseMove(new Point(500, 500));
             Assert.Equal(
-                Colors.White,
+                Colors.Transparent,
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
         }
         finally
@@ -360,7 +335,7 @@ public sealed class PdfTableOfContentsTests
                 Color.Parse("#666D80"),
                 Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
             Assert.Equal(
-                Colors.White,
+                Colors.Transparent,
                 Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
 
             Click(window, button);
@@ -414,9 +389,6 @@ public sealed class PdfTableOfContentsTests
     private static string[] Titles(DocumentTabViewModel document) =>
         document.VisibleTocEntries.Select(entry => entry.Title).ToArray();
 
-    private static T Named<T>(Visual root, string name) where T : Control =>
-        root.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
-
     private static ToggleButton ExpanderFor(Visual root, TocEntryViewModel entry) =>
         root.GetVisualDescendants().OfType<ToggleButton>().Single(button =>
             button.Name == "TocExpanderButton" && ReferenceEquals(button.DataContext, entry));
@@ -424,11 +396,6 @@ public sealed class PdfTableOfContentsTests
     private static Button TitleButtonFor(Visual root, TocEntryViewModel entry) =>
         root.GetVisualDescendants().OfType<Button>().Single(button =>
             button.Name == "TocNavigateButton" && ReferenceEquals(button.DataContext, entry));
-
-    private static Point Center(Control control, Visual relativeTo) =>
-        control.TranslatePoint(
-            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
-            relativeTo)!.Value;
 
     private static Rect RelativeBounds(Control control, Visual relativeTo)
     {
@@ -444,12 +411,5 @@ public sealed class PdfTableOfContentsTests
         Assert.Equal(expected.M12, actual.M12, precision: 6);
         Assert.Equal(expected.M21, actual.M21, precision: 6);
         Assert.Equal(expected.M22, actual.M22, precision: 6);
-    }
-
-    private static void Click(Window window, Control control)
-    {
-        Point center = Center(control, window);
-        window.MouseDown(center, MouseButton.Left);
-        window.MouseUp(center, MouseButton.Left);
     }
 }

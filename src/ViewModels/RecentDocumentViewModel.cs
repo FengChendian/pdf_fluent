@@ -19,7 +19,9 @@ public sealed class RecentDocumentViewModel(
     public string FileName => Path.GetFileNameWithoutExtension(FilePath);
     public int PageCount { get; } = document.PageCount;
     public DateTimeOffset LastOpened { get; } = document.LastOpened;
-    public Avalonia.Vector ScrollOffset { get; private set; } = new(document.ScrollOffsetX, document.ScrollOffsetY);
+    public Avalonia.Vector ScrollOffset { get; private set; } = new(
+        document.ScrollOffsetX,
+        Math.Max(0, document.ScrollOffsetY - (document.ScrollLayoutVersion == 0 ? 48 : 0)));
     public bool IsUnread { get; private set; } = document.IsUnread;
     public string PageCountText => $"{PageCount} 页";
     public string LastOpenedText => LastOpened.ToLocalTime().ToString("MM月dd日 HH:mm");
@@ -48,6 +50,7 @@ public sealed class RecentDocumentViewModel(
         LastOpened = LastOpened,
         ScrollOffsetX = ScrollOffset.X,
         ScrollOffsetY = ScrollOffset.Y,
+        ScrollLayoutVersion = 1,
         IsUnread = IsUnread,
         Thumbnail = _thumbnailData,
     };

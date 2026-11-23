@@ -78,6 +78,14 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     public bool IsHomeSelected => IsLibraryOpen && !IsFavoritesSelected;
     public bool IsSettingsOpen => SelectedDocument is null && IsSettingsSelected;
     public bool IsDocumentOpen => SelectedDocument is not null;
+    /// <summary>The single fixed workspace tab is active whenever no document tab is selected.</summary>
+    public bool IsWorkspaceTabSelected => SelectedDocument is null;
+    public string WorkspaceTabTitle => IsSettingsSelected ? "设置" : IsFavoritesSelected ? "收藏" : "主页";
+    public string WorkspaceTabIcon => IsSettingsSelected
+        ? "fa-solid fa-gear"
+        : IsFavoritesSelected
+            ? "fa-solid fa-star"
+            : "fa-solid fa-house";
     public bool HasRecentDocuments => RecentDocuments.Count > 0;
     public bool HasNoRecentDocuments => RecentDocuments.Count == 0;
     public bool HasNoVisibleRecentDocuments => VisibleRecentDocuments.Count == 0;
@@ -119,6 +127,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsDocumentOpen));
         OnPropertyChanged(nameof(IsSettingsOpen));
+        OnPropertyChanged(nameof(IsWorkspaceTabSelected));
     }
 
     partial void OnIsSettingsSelectedChanged(bool value)
@@ -126,12 +135,16 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsLibraryOpen));
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsSettingsOpen));
+        OnPropertyChanged(nameof(WorkspaceTabTitle));
+        OnPropertyChanged(nameof(WorkspaceTabIcon));
     }
 
     partial void OnIsFavoritesSelectedChanged(bool value)
     {
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(HasFavoriteNotification));
+        OnPropertyChanged(nameof(WorkspaceTabTitle));
+        OnPropertyChanged(nameof(WorkspaceTabIcon));
     }
 
     partial void OnSearchTextChanged(string value)
@@ -154,6 +167,11 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         IsFavoritesSelected = false;
         IsSettingsSelected = false;
         SelectedDocument = null;
+        // The fixed tab and the sidebar button are ToggleButtons whose IsChecked is
+        // bound one-way. Re-raise the computed flags so clicking the already active
+        // workspace control cannot leave it visually unchecked.
+        OnPropertyChanged(nameof(IsHomeSelected));
+        OnPropertyChanged(nameof(IsWorkspaceTabSelected));
     }
 
     [RelayCommand]
@@ -162,6 +180,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         IsSettingsSelected = false;
         SelectedDocument = null;
         IsFavoritesSelected = true;
+        OnPropertyChanged(nameof(IsFavoritesSelected));
         MarkFavoritesAsRead();
     }
 
@@ -171,6 +190,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         IsFavoritesSelected = false;
         SelectedDocument = null;
         IsSettingsSelected = true;
+        OnPropertyChanged(nameof(IsSettingsSelected));
     }
 
     public Task CheckForUpdatesOnStartupAsync() => Settings.CheckForUpdatesOnStartupAsync();
@@ -410,6 +430,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             LastOpened = DateTimeOffset.Now,
             ScrollOffsetX = document.ScrollOffset.X,
             ScrollOffsetY = document.ScrollOffset.Y,
+            ScrollLayoutVersion = 1,
             Thumbnail = thumbnail,
         }, RemoveRecentDocumentCommand));
 
