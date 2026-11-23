@@ -21,6 +21,13 @@
 - 排查内存问题时必须区分三类数据：LRU 位图缓存、单次渲染的瞬时缓冲、以及 .NET/Windows 尚未归还的进程工作集；只有第一类受 256 MiB 预算约束。当前单页渲染让 PDFium 直接写入未发布的 `WriteableBitmap`，不再分配原始像素数组；只有兼容的原始缓冲区/批量 API 才会额外持有原始像素数组。
 - 回归测试：`DocumentTabViewModelTests.CacheBudgetUsesActualBitmapSizeAfterReRenderingAtHigherScale`、`DocumentTabViewModelTests.SwitchingAwayReleasesAllCachedBitmaps`、`PdfVirtualizationMemoryTests.ZoomingInAfterScrollingKeepsTheBitmapCacheWithinBudget`。改动缓存淘汰逻辑后必须全部通过。
 
+# 启动与发布约定
+
+- 发布必须保持 `PublishReadyToRun=true`；默认同时启用 `PublishReadyToRunComposite=true`。不要把“打开 PDF 卡死”归因于 PDFium 不兼容而关闭 R2R 或排除 `PDFiumCore.dll`。
+- PDFiumCore 生成的委托属性（`IFSDK_PAUSE.NeedToPauseNow`、`FPDF_FILEWRITE_.WriteBlock` 等）只保存原生函数指针，不持有托管委托。赋值后必须在整个原生调用期间保留委托的强引用，并在调用结束后 `GC.KeepAlive`；否则 R2R 或 GC 压力下会触发 `Environment.FailFast`（回调了已回收的委托）。
+- 命令行 PDF 的打开应放在主窗口首帧之后（`MainWindow.Opened`），不要在 `OnFrameworkInitializationCompleted` 里同步打开文档而拖慢 UI 出现时间。
+- 启动耗时排查使用 `FLUENTPDF_STARTUP_TRACE=1`，分析方法和基准数据见 `docs/STARTUP-PERFORMANCE.md`。
+
 # 测试资源备注
 
 - `tests/pdf_fluent.Tests/assets/CUDA_by_Example.pdf`：PDF 功能测试样本。

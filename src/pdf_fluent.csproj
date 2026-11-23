@@ -11,6 +11,12 @@
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
         <Authors>Yichen Zhao</Authors>
+        <!-- ReadyToRun is only valid for RID-specific publishes. The release
+             workflow passes -r win-x64; keep plain dotnet build unaffected.
+             Pass -p:PublishReadyToRunComposite=false for smaller individual
+             R2R images if composite R2R ever causes a compatibility issue. -->
+        <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+        <PublishReadyToRunComposite Condition="'$(RuntimeIdentifier)' != '' and '$(SelfContained)' == 'true' and '$(PublishReadyToRun)' == 'true'">true</PublishReadyToRunComposite>
     </PropertyGroup>
 
     <ItemGroup>

@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.ViewModels;
 
 namespace pdf_fluent.Views;
@@ -14,7 +15,9 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        StartupTrace.Mark("MainWindow.ctor.enter");
         InitializeComponent();
+        StartupTrace.Mark("MainWindow.InitializeComponent");
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -28,6 +31,17 @@ public partial class MainWindow : Window
         };
         Closing += OnWindowClosing;
         Closed += (_, _) => (DataContext as MainViewModel)?.Dispose();
+        Opened += (_, _) => StartupTrace.Mark("MainWindow.Opened");
+        LayoutUpdated += OnFirstLayoutUpdated;
+    }
+
+    private bool _firstLayoutReported;
+
+    private void OnFirstLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (_firstLayoutReported) return;
+        _firstLayoutReported = true;
+        StartupTrace.Mark("MainWindow.FirstLayout");
     }
 
     private static void OnDragOver(object? sender, DragEventArgs e)

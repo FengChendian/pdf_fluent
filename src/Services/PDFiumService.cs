@@ -1,4 +1,5 @@
 using PDFiumCore;
+using PDFiumCore.Delegates;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,6 +10,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.Models;
 
 namespace pdf_fluent.Services
@@ -29,12 +31,14 @@ namespace pdf_fluent.Services
 
         public PDFiumService()
         {
+            StartupTrace.Mark("PDFiumService.ctor.enter");
             lock (_libraryLock)
             {
                 if (_libraryRefCount == 0)
                     fpdfview.FPDF_InitLibrary();
                 _libraryRefCount++;
             }
+            StartupTrace.Mark("PDFiumService.ctor.exit (FPDF_InitLibrary)");
         }
 
         private int _documentOpenCount;
@@ -96,6 +100,7 @@ namespace pdf_fluent.Services
 
         public (double Width, double Height)[] GetPageSizes(string filePath)
         {
+            StartupTrace.Mark("PDFiumService.GetPageSizes.enter");
             lock (_pageLock)
             {
                 var document = GetOrLoadDocument(filePath);
@@ -109,6 +114,7 @@ namespace pdf_fluent.Services
                     sizes[i] = (width, height);
                 }
 
+                StartupTrace.Mark($"PDFiumService.GetPageSizes.exit ({pageCount} pages)");
                 return sizes;
             }
         }
@@ -149,7 +155,8 @@ namespace pdf_fluent.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var document = GetOrLoadDocument(filePath);
-                return RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
+                StartupTrace.Mark($"PDFiumService.RenderPageToWriteableBitmap.enter (page {pageNumber})");
+                var result = RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var bitmap = new WriteableBitmap(
@@ -173,6 +180,8 @@ namespace pdf_fluent.Services
                         throw;
                     }
                 });
+                StartupTrace.Mark($"PDFiumService.RenderPageToWriteableBitmap.exit (page {pageNumber})");
+                return result;
             }
         }
 
@@ -311,8 +320,16 @@ namespace pdf_fluent.Services
                 if (bitmap == null)
                     throw new InvalidOperationException("无法创建 PDFium 位图。");
 
+                // PDFiumCore stores only the native function pointer in
+                // IFSDK_PAUSE.NeedToPauseNow; it does not keep the managed
+                // delegate alive. Hold a local reference (and KeepAlive it
+                // after the last native call) so the GC cannot collect the
+                // thunk while PDFium is still calling it. Without this the
+                // process can FailFast with "callback was made on a garbage
+                // collected delegate", especially with ReadyToRun timing.
+                Func_int___IntPtr needToPauseNow = _ => cancellationToken.IsCancellationRequested ? 1 : 0;
                 using var pause = new IFSDK_PAUSE { Version = 1 };
-                pause.NeedToPauseNow = _ => cancellationToken.IsCancellationRequested ? 1 : 0;
+                pause.NeedToPauseNow = needToPauseNow;
                 try
                 {
                     fpdfview.FPDFBitmapFillRect(bitmap, 0, 0, width, height, uint.MaxValue);
@@ -330,6 +347,8 @@ namespace pdf_fluent.Services
                 {
                     fpdf_progressive.FPDF_RenderPageClose(page);
                     fpdfview.FPDFBitmapDestroy(bitmap);
+                    GC.KeepAlive(needToPauseNow);
+                    GC.KeepAlive(pause);
                 }
             }
         }
@@ -975,7 +994,10 @@ namespace pdf_fluent.Services
             using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
             using var fileWrite = new FPDF_FILEWRITE_();
 
-            fileWrite.WriteBlock = (pThis, pData, size) =>
+            // Same PDFiumCore lifetime issue as IFSDK_PAUSE: the setter only
+            // stores a native function pointer, so root the delegate here and
+            // keep it alive until FPDF_SaveAsCopy has finished calling it.
+            Func_int___IntPtr___IntPtr_ulong writeBlock = (pThis, pData, size) =>
             {
                 int length = (int)size;
                 var bytes = new byte[length];
@@ -983,12 +1005,15 @@ namespace pdf_fluent.Services
                 stream.Write(bytes, 0, length);
                 return 1;
             };
+            fileWrite.WriteBlock = writeBlock;
 
             int ok;
             lock (_pageLock)
             {
                 ok = fpdf_save.FPDF_SaveAsCopy(document, fileWrite, 0);
             }
+            GC.KeepAlive(writeBlock);
+            GC.KeepAlive(fileWrite);
             if (ok == 0)
                 throw new InvalidOperationException("FPDF_SaveAsCopy 保存失败");
         }

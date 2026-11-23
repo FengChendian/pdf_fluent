@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.Models;
 using pdf_fluent.Services;
 
@@ -36,17 +37,21 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         _pdfService = pdfService;
         _recentService = recentService;
         _favoriteService = favoriteService;
+        StartupTrace.Mark("MainViewModel.ctor.enter");
         Settings = updateCheckService is null
             ? new SettingsViewModel()
             : new SettingsViewModel(updateCheckService, ApplicationVersion.Current);
+        StartupTrace.Mark("MainViewModel.SettingsViewModel");
         _statusMessageTimer = new DispatcherTimer
         {
             Interval = statusMessageDuration ?? StatusMessageDuration,
         };
         _statusMessageTimer.Tick += OnStatusMessageTimerTick;
+        StartupTrace.Mark("MainViewModel.DispatcherTimer");
 
         foreach (var document in _recentService.Load().OrderByDescending(d => d.LastOpened).Take(MaxRecentDocuments))
             RecentDocuments.Add(new RecentDocumentViewModel(document, RemoveRecentDocumentCommand));
+        StartupTrace.Mark("MainViewModel.RecentDocuments.LoadAndDecodeThumbnails");
 
         foreach (var document in _favoriteService.Load().OrderByDescending(d => d.LastOpened))
         {
@@ -56,8 +61,10 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             FavoriteDocuments.Add(new RecentDocumentViewModel(
                 document, RemoveFavoriteDocumentCommand, "从收藏夹移除"));
         }
+        StartupTrace.Mark("MainViewModel.FavoriteDocuments.LoadAndDecodeThumbnails");
 
         RefreshVisibleRecentDocuments();
+        StartupTrace.Mark("MainViewModel.ctor.exit");
     }
 
     public Func<Task<string?>>? PdfFilePicker { get; set; }
@@ -193,11 +200,13 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (IsOpening || _disposed) return;
 
+        StartupTrace.Mark($"OpenDocumentAsync.enter ({Path.GetFileName(filePath)})");
         var existing = OpenDocuments.FirstOrDefault(d =>
             string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
             SelectedDocument = existing;
+            StartupTrace.Mark("OpenDocumentAsync.existing");
             return;
         }
 
@@ -212,12 +221,15 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         };
         OpenDocuments.Add(document);
         SelectedDocument = document;
+        StartupTrace.Mark("OpenDocumentAsync.DocumentCreated");
 
         try
         {
             await document.LoadAsync();
+            StartupTrace.Mark("OpenDocumentAsync.LoadAsync.done");
             if (document.ErrorMessage is null && OpenDocuments.Contains(document))
                 await AddRecentDocumentAsync(document);
+            StartupTrace.Mark("OpenDocumentAsync.AddRecentDocument.done");
         }
         finally
         {

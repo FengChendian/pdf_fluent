@@ -1,6 +1,7 @@
 using Avalonia;
 using Optris.Icons.Avalonia;
 using Optris.Icons.Avalonia.FontAwesome;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.Services;
 using System;
 
@@ -14,14 +15,19 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        StartupTrace.Start();
+
         using var coordinator = new SingleInstanceCoordinator();
+        StartupTrace.Mark("SingleInstanceCoordinator");
         if (!coordinator.IsPrimary && coordinator.TrySendAsync(args).GetAwaiter().GetResult())
             return;
 
         SingleInstance = coordinator.IsPrimary ? coordinator : null;
         try
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            var builder = BuildAvaloniaApp();
+            StartupTrace.Mark("BuildAvaloniaApp");
+            builder.StartWithClassicDesktopLifetime(args);
         }
         finally
         {

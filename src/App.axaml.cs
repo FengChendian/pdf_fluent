@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using System.Runtime.InteropServices;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 
@@ -11,23 +12,48 @@ namespace pdf_fluent;
 
 public partial class App : Application
 {
+    public App()
+    {
+        StartupTrace.Mark("App.ctor");
+    }
+
     public override void Initialize()
     {
+        StartupTrace.Mark("App.Initialize.enter");
         AvaloniaXamlLoader.Load(this);
+        StartupTrace.Mark("App.Initialize.exit (App.axaml + FluentTheme)");
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
+        StartupTrace.Mark("FrameworkInit.enter");
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var viewModel = new MainViewModel();
-            desktop.MainWindow = new MainWindow
+            StartupTrace.Mark("MainViewModel.ctor");
+            var mainWindow = new MainWindow
             {
                 DataContext = viewModel,
             };
-            _ = viewModel.CheckForUpdatesOnStartupAsync();
+            desktop.MainWindow = mainWindow;
+            StartupTrace.Mark("MainWindow.ctor");
             var openDocumentLock = new SemaphoreSlim(1, 1);
-            _ = OpenDocumentsAsync(desktop.Args);
+
+            // Let the shell paint its first frame before doing file I/O,
+            // PDF parsing and page rendering. Opening a PDF from Explorer
+            // passes the path as a command-line argument; doing that work
+            // inside OnFrameworkInitializationCompleted delays the first
+            // visible frame and makes the app look frozen on cold start.
+            bool startupWorkStarted = false;
+            mainWindow.Opened += (_, _) =>
+            {
+                if (startupWorkStarted) return;
+                startupWorkStarted = true;
+                StartupTrace.Mark("MainWindow.Opened -> start deferred startup work");
+                _ = OpenDocumentsAsync(desktop.Args);
+                _ = viewModel.CheckForUpdatesOnStartupAsync();
+            };
+
             Program.SingleInstance?.StartListening(args => Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 ActivateMainWindow(desktop.MainWindow);
@@ -49,6 +75,7 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+        StartupTrace.Mark("FrameworkInit.exit");
     }
 
     private static void ActivateMainWindow(Window? window)

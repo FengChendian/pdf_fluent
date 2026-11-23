@@ -14,12 +14,38 @@
 
 1. 校验 Git 标签与项目版本号一致。
 2. 运行完整测试套件。
-3. 发布自包含的 `win-x64` 应用。
+3. 发布自包含的 `win-x64` 应用（启用 ReadyToRun / Composite R2R）。
 4. 使用 Inno Setup 编译安装包。
 5. 上传 GitHub Actions 构建产物。
 6. 创建对应的 GitHub Release 并附加安装包。
 
 普通分支推送不会触发发布，只有推送 `v*` 标签才会触发。
+
+## 启动性能约定
+
+应用发布时默认启用 ReadyToRun，并优先使用 Composite R2R：
+
+```xml
+<PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+<PublishReadyToRunComposite Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRunComposite>
+```
+
+这不是导致 PDF 打开异常的选项。PDF 打开异常的真实原因是 PDFiumCore 的
+`IFSDK_PAUSE` 回调委托没有被调用方保活，ReadyToRun 只是改变了 GC 时机，
+让这个潜在的 use-after-free 更容易暴露；修复位于
+`src/Services/PDFiumService.cs` 的 `RenderPageIntoBuffer` 和
+`SaveDocumentAsCopy`，不要通过关闭 ReadyToRun 来绕开。
+
+如果需要排查冷启动耗时，可在启动前设置：
+
+```powershell
+$env:FLUENTPDF_STARTUP_TRACE = "1"
+$env:FLUENTPDF_STARTUP_TRACE_FILE = "$PWD\startup.log"
+```
+
+然后正常启动应用，日志会按阶段记录从进程创建到首帧的时间。该诊断默认关闭，
+不会影响正常发布。不要为了追求启动时间启用 `PublishSingleFile`、裁剪或
+`PublishTrimmed`；这些选项会改变原生库和 Avalonia 资源的解析方式。
 
 ## 版本号约定
 
@@ -113,11 +139,13 @@ dotnet publish src/pdf_fluent.csproj `
   --self-contained true `
   -p:PublishSingleFile=false `
   -p:PublishTrimmed=false `
+  -p:PublishReadyToRun=true `
+  -p:PublishReadyToRunComposite=true `
   -p:DebugType=embedded `
   --output artifacts/publish/win-x64
 ```
 
-保留完整发布目录，不启用裁剪或单文件发布，以确保 Avalonia 和 PDFium 原生依赖完整可用。
+保留完整发布目录，不启用裁剪或单文件发布，以确保 Avalonia 和 PDFium 原生依赖完整可用。ReadyToRun 与 Composite R2R 的配置同时也写在 `src/pdf_fluent.csproj` 中，因此省略这两个参数时也会按项目默认值发布。
 
 ### 编译安装包
 

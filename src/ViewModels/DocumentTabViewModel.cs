@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using pdf_fluent.Diagnostics;
 using pdf_fluent.Services;
 
 namespace pdf_fluent.ViewModels;
@@ -180,11 +181,13 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         ClearPages();
         ResetHighlights();
         ResetTableOfContents();
+        StartupTrace.Mark($"DocumentTabViewModel.LoadAsync.enter ({Path.GetFileName(FilePath)})");
 
         try
         {
             var (sizes, bookmarks) = await Task.Run(() =>
                 (_pdfService.GetPageSizes(FilePath), _pdfService.GetBookmarks(FilePath)));
+            StartupTrace.Mark($"DocumentTabViewModel.LoadAsync.pageSizes ({sizes.Length} pages)");
             if (_disposed) return;
 
             _renderZoom = _zoom;
@@ -195,6 +198,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
             PageCount = sizes.Length;
             Pages = pages;
             SetTableOfContents(bookmarks);
+            StartupTrace.Mark("DocumentTabViewModel.LoadAsync.pagesCreated");
         }
         catch (Exception ex)
         {
@@ -204,6 +208,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         {
             _loadInProgress = false;
             IsLoading = false;
+            StartupTrace.Mark("DocumentTabViewModel.LoadAsync.exit");
         }
     }
 

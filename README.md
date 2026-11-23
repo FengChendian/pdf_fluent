@@ -39,4 +39,4 @@ dotnet test pdf_fluent.slnx --configuration Release
 
 发布配置使用 Inno Setup 和 GitHub Actions，安装包包含 .NET 运行时，并支持可选的桌面快捷方式、开始菜单项及 PDF 文件关联。
 
-版本号统一维护在 `src/pdf_fluent.csproj`，推送对应的 `v*` 标签即可触发发布。完整的本地打包和 GitHub Release 流程见 [Windows 发布流程](docs/RELEASING.md)。
+版本号统一维护在 `src/pdf_fluent.csproj`，推送对应的 `v*` 标签即可触发发布。完整的本地打包和 GitHub Release 流程见 [Windows 发布流程](docs/RELEASING.md)，冷启动耗时拆解、ReadyToRun 与 PDFium 回调生命周期问题见 [启动性能分析](docs/STARTUP-PERFORMANCE.md)。

@@ -60,12 +60,17 @@ jobs:
       - name: Publish self-contained win-x64 application
         shell: pwsh
         run: |
+          # ReadyToRun is intentional. The PDFiumCore IFSDK_PAUSE callback
+          # delegate is rooted in PDFiumService.RenderPageIntoBuffer; do not
+          # disable R2R to work around a PDF-open hang.
           dotnet publish src/pdf_fluent.csproj `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
             -p:PublishSingleFile=false `
             -p:PublishTrimmed=false `
+            -p:PublishReadyToRun=true `
+            -p:PublishReadyToRunComposite=true `
             -p:DebugType=embedded `
             --output artifacts/publish/win-x64
 
