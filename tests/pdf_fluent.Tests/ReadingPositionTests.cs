@@ -14,6 +14,98 @@ namespace pdf_fluent.Tests;
 public sealed class ReadingPositionTests
 {
     [AvaloniaFact]
+    public async Task SwitchingTabsAndHomeReusesBitmapsAndClosingReleasesOnlyThatTab()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));
+        using var viewModel = new MainViewModel(
+            new PDFiumService(),
+            new RecentDocumentsService(Path.Combine(directory, "recent.json")),
+            new FavoriteDocumentsService(Path.Combine(directory, "favorites.json")));
+        using var firstService = new FakePdfDocumentService(8, 640, 800);
+        using var secondService = new FakePdfDocumentService(8, 640, 800);
+        var first = new DocumentTabViewModel("first.pdf", firstService);
+        var second = new DocumentTabViewModel("second.pdf", secondService);
+        await first.LoadAsync();
+        await second.LoadAsync();
+        firstService.AllowRenders();
+        secondService.AllowRenders();
+        viewModel.OpenDocuments.Add(first);
+        viewModel.OpenDocuments.Add(second);
+        viewModel.SelectedDocument = first;
+        var window = new MainWindow { DataContext = viewModel };
+
+        try
+        {
+            async Task WaitForPagesAsync()
+            {
+                window.UpdateLayout();
+                await PdfTestHelpers.WaitUntilAsync(() =>
+                    Reader(window).PageItems.GetRealizedContainers()
+                        .Select(container => container.DataContext as PdfPageViewModel)
+                        .OfType<PdfPageViewModel>()
+                        .All(page => page.Image is not null) &&
+                    viewModel.SelectedDocument!.PendingRenderCount == 0);
+            }
+
+            window.Show();
+            await WaitForPagesAsync();
+            ScrollToPage(window, first, 2);
+            await WaitForPagesAsync();
+            var firstBitmaps = first.Pages.Where(page => page.Image is not null)
+                .ToDictionary(page => page, page => page.Image!);
+            Assert.NotEmpty(firstBitmaps);
+            int firstRenderCount = firstService.RenderCallCount;
+
+            viewModel.SelectedDocument = second;
+            await WaitForPagesAsync();
+            ScrollToPage(window, second, 4);
+            await WaitForPagesAsync();
+            var secondBitmaps = second.Pages.Where(page => page.Image is not null)
+                .ToDictionary(page => page, page => page.Image!);
+            Assert.NotEmpty(secondBitmaps);
+            int secondRenderCount = secondService.RenderCallCount;
+
+            for (int iteration = 0; iteration < 2; iteration++)
+            {
+                viewModel.ShowHomeCommand.Execute(null);
+                window.UpdateLayout();
+                foreach (DocumentTabViewModel document in new[] { first, second })
+                {
+                    viewModel.SelectedDocument = document;
+                    await WaitForPagesAsync();
+                }
+            }
+
+            Assert.Equal(firstRenderCount, firstService.RenderCallCount);
+            Assert.Equal(secondRenderCount, secondService.RenderCallCount);
+            Assert.All(firstBitmaps, entry => Assert.Same(entry.Value, entry.Key.Image));
+            Assert.All(secondBitmaps, entry => Assert.Same(entry.Value, entry.Key.Image));
+            Assert.Equal(PdfTestHelpers.LiveBitmapBytes(first), first.CachedBitmapBytes);
+            Assert.Equal(PdfTestHelpers.LiveBitmapBytes(second), second.CachedBitmapBytes);
+
+            await viewModel.CloseDocumentCommand.ExecuteAsync(first);
+            window.UpdateLayout();
+
+            Assert.Same(second, viewModel.SelectedDocument);
+            Assert.DoesNotContain(first, viewModel.OpenDocuments);
+            Assert.Equal(0, first.CachedBitmapBytes);
+            Assert.Equal(0, first.CachedPageCount);
+            Assert.All(firstBitmaps, entry =>
+            {
+                Assert.Null(entry.Key.Image);
+                Assert.Throws<ObjectDisposedException>(() => entry.Value.Lock());
+            });
+            Assert.All(secondBitmaps, entry => Assert.Same(entry.Value, entry.Key.Image));
+            Assert.Equal(secondRenderCount, secondService.RenderCallCount);
+        }
+        finally
+        {
+            window.Close();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task SwitchingTabsAndHomeRestoresAndPersistsEachScrollOffset()
     {
         string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));

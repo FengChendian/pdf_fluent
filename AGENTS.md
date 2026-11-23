@@ -19,7 +19,8 @@
 - 维护不变量：淘汰后 `CachedBitmapBytes` 应等于所有活页面的位图字节之和；`TrimCache` 只淘汰不在 `_realizedPages` 中的页（可见页 + 预取缓冲页固定不淘汰）。
 - 缓存回收是事件驱动的，不是定时器：只在渲染完成（`TouchCache`）、页面离开实现集合（`ReleasePage`）、布局同步（`SyncRealizedPages`）时执行 `TrimCache`。因此可见页/缓冲页较多时，位图总量允许短时高于预算；不要据此添加定时 `GC.Collect` 之类的“回收”。
 - 排查内存问题时必须区分三类数据：LRU 位图缓存、单次渲染的瞬时缓冲、以及 .NET/Windows 尚未归还的进程工作集；只有第一类受 256 MiB 预算约束。当前单页渲染让 PDFium 直接写入未发布的 `WriteableBitmap`，不再分配原始像素数组；只有兼容的原始缓冲区/批量 API 才会额外持有原始像素数组。
-- 回归测试：`DocumentTabViewModelTests.CacheBudgetUsesActualBitmapSizeAfterReRenderingAtHigherScale`、`DocumentTabViewModelTests.SwitchingAwayReleasesAllCachedBitmaps`、`PdfVirtualizationMemoryTests.ZoomingInAfterScrollingKeepsTheBitmapCacheWithinBudget`。改动缓存淘汰逻辑后必须全部通过。
+- Tab 切换只取消待完成的渲染，保留各文档已渲染的位图缓存；关闭 Tab（`Dispose`）或重新加载文档时才整体清空。每个文档仍独立遵守 256 MiB LRU 预算，不预加载整份 PDF。
+- 回归测试：`DocumentTabViewModelTests.CacheBudgetUsesActualBitmapSizeAfterReRenderingAtHigherScale`、`DocumentTabViewModelTests.SwitchingAwayRetainsCachedBitmapsUntilDisposed`、`PdfVirtualizationMemoryTests.ZoomingInAfterScrollingKeepsTheBitmapCacheWithinBudget`。改动缓存淘汰逻辑后必须全部通过。
 
 # 启动与发布约定
 

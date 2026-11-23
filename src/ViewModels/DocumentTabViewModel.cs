@@ -168,7 +168,9 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
 
     partial void OnIsSelectedChanged(bool value)
     {
-        if (!value) ReleaseRenderingResources();
+        // Hidden tabs stop doing work, but keep their bitmaps so returning to
+        // the tab can display the cached pages without rendering them again.
+        if (!value) StopRendering();
     }
 
     public async Task LoadAsync()
@@ -659,7 +661,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         _cacheBytes = 0;
     }
 
-    private void ReleaseRenderingResources()
+    private void StopRendering()
     {
         _renderVersion++;
         _renderingSuspended = false;
@@ -667,14 +669,14 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         _realizedPages.Clear();
         _visiblePages.Clear();
         CancelAutomaticTextLoadsExcept(_visiblePages);
-        ClearBitmaps();
         _renderZoom = _zoom;
         _appliedScaling = _renderScaling;
     }
 
     private void ClearPages()
     {
-        ReleaseRenderingResources();
+        StopRendering();
+        ClearBitmaps();
         Pages = [];
         PageCount = 0;
     }

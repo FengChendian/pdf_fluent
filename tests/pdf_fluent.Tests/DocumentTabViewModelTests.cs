@@ -330,7 +330,7 @@ public sealed class DocumentTabViewModelTests
     }
 
     [AvaloniaFact]
-    public async Task SwitchingAwayReleasesAllCachedBitmaps()
+    public async Task SwitchingAwayRetainsCachedBitmapsUntilDisposed()
     {
         using var service = new FakePdfDocumentService(3, 640, 800);
         using var document = new DocumentTabViewModel("unused.pdf", service);
@@ -353,11 +353,67 @@ public sealed class DocumentTabViewModelTests
         document.IsSelected = true;
         document.IsSelected = false;
 
-        Assert.All(document.Pages, page => Assert.Null(page.Image));
+        Assert.Equal(3, document.CachedPageCount);
+        Assert.Equal(LiveBitmapBytes(document), document.CachedBitmapBytes);
+        for (int index = 0; index < bitmaps.Count; index++)
+        {
+            Assert.Same(bitmaps[index], document.Pages[index].Image);
+            using var framebuffer = bitmaps[index].Lock();
+        }
+
+        document.IsSelected = true;
+        foreach (PdfPageViewModel page in document.Pages)
+            document.EnsurePageRendered(page);
+
+        Assert.Equal(3, service.RenderCallCount);
+        Assert.Equal(0, document.PendingRenderCount);
+
+        var pages = document.Pages.ToArray();
+        document.Dispose();
+
+        Assert.All(pages, page => Assert.Null(page.Image));
+        Assert.Empty(document.Pages);
         Assert.Equal(0, document.CachedPageCount);
         Assert.Equal(0, document.CachedBitmapBytes);
         Assert.All(bitmaps, bitmap =>
             Assert.Throws<ObjectDisposedException>(() => bitmap.Lock()));
+    }
+
+    [AvaloniaFact]
+    public async Task SwitchingAwayCancelsPendingRendersAndCanRenderAgain()
+    {
+        using var service = new FakePdfDocumentService(3);
+        using var document = new DocumentTabViewModel("unused.pdf", service);
+        await document.LoadAsync();
+        document.IsSelected = true;
+
+        try
+        {
+            document.EnsurePageRendered(document.Pages[0]);
+            await service.RenderStarted.WaitAsync(TimeSpan.FromSeconds(2));
+            document.EnsurePageRendered(document.Pages[1]);
+            document.EnsurePageRendered(document.Pages[2]);
+
+            document.IsSelected = false;
+
+            Assert.Equal(0, document.PendingRenderCount);
+            Assert.Equal(0, document.QueuedRenderCount);
+            Assert.Equal(0, document.RealizedPageCount);
+            Assert.All(document.Pages, page => Assert.False(page.IsLoading));
+
+            document.IsSelected = true;
+            document.EnsurePageRendered(document.Pages[0]);
+            service.AllowRenders();
+            await WaitUntilAsync(() => document.Pages[0].Image is not null);
+
+            Assert.Equal(new[] { 0, 0 }, service.RenderedPages);
+            Assert.Null(document.Pages[1].Image);
+            Assert.Null(document.Pages[2].Image);
+        }
+        finally
+        {
+            service.AllowRenders();
+        }
     }
 
     [AvaloniaFact]
