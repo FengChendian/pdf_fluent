@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using pdf_fluent.Diagnostics;
+using pdf_fluent.Models;
 using pdf_fluent.Services;
 
 namespace pdf_fluent.ViewModels;
@@ -92,6 +94,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     public string FilePath { get; }
     public string FileName => Path.GetFileNameWithoutExtension(FilePath);
     public double VisualZoom => _visualZoom ?? _zoom;
+    public bool IsZoomAnimating => _visualZoom.HasValue;
     public int ZoomPercent => (int)Math.Round(VisualZoom * 100);
     public bool IsLoaded => !IsLoading;
     internal int PendingRenderCount => _renderRequests.Count;
@@ -324,7 +327,9 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     {
         if (Nullable.Equals(_visualZoom, zoom)) return;
 
+        bool wasAnimating = IsZoomAnimating;
         _visualZoom = zoom;
+        if (wasAnimating != IsZoomAnimating) OnPropertyChanged(nameof(IsZoomAnimating));
         OnPropertyChanged(nameof(VisualZoom));
         OnPropertyChanged(nameof(ZoomPercent));
     }
@@ -366,12 +371,16 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         if (page.Image is null || double.IsNaN(page.RenderedScale)) return false;
 
         double required = ComputeRenderScale(page);
-        return page.RenderedScale >= required - RenderScaleTolerance;
+        PixelSize rendered = PdfPageGeometry.GetPixelSize(page.PointWidth, page.PointHeight, page.RenderedScale);
+        PixelSize target = PdfPageGeometry.GetPixelSize(page.PointWidth, page.PointHeight, required);
+        return page.RenderedScale >= required - RenderScaleTolerance &&
+               rendered.Width >= target.Width && rendered.Height >= target.Height;
     }
 
+    // A small scale change can still cross an integer pixel boundary. Commit
+    // the exact state; IsRenderedAtCurrentScale decides whether pixels can be reused.
     private bool RenderStateIsCurrent =>
-        Math.Abs(_renderZoom - _zoom) < RenderScaleTolerance &&
-        Math.Abs(_appliedScaling - _renderScaling) < RenderScaleTolerance;
+        _renderZoom.Equals(_zoom) && _appliedScaling.Equals(_renderScaling);
 
     /// <summary>
     /// Re-renders the visible pages when the zoom factor or the screen scaling
@@ -518,7 +527,8 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
                     FilePath,
                     page.PageIndex,
                     (float)request.RenderScale,
-                    request.CancellationToken),
+                    request.CancellationToken,
+                    request.PixelSize),
                 request.CancellationToken);
 
             if (!CanAcceptRender(request))
@@ -709,6 +719,8 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         public PdfPageViewModel Page { get; } = page;
         public int RenderVersion { get; } = renderVersion;
         public double RenderScale { get; } = renderScale;
+        public PixelSize PixelSize { get; } =
+            PdfPageGeometry.GetPixelSize(page.PointWidth, page.PointHeight, renderScale);
         public bool IsVisible { get; set; } = isVisible;
         public RenderRequestState State { get; set; } = RenderRequestState.Queued;
         public DateTimeOffset LastRequestedAt { get; private set; } = DateTimeOffset.UtcNow;

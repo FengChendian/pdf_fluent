@@ -16,6 +16,7 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
     private readonly List<int> _textPages = new();
     private int _textLoadCancellationCount;
     private readonly bool _scaleRenderSize;
+    private readonly bool _useRequestedPixelSize;
     private readonly int _pageCount;
     private readonly int _renderWidth;
     private readonly int _renderHeight;
@@ -24,12 +25,14 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         int pageCount,
         int renderWidth = 1,
         int renderHeight = 1,
-        bool scaleRenderSize = false)
+        bool scaleRenderSize = false,
+        bool useRequestedPixelSize = false)
     {
         _pageCount = pageCount;
         _renderWidth = renderWidth;
         _renderHeight = renderHeight;
         _scaleRenderSize = scaleRenderSize;
+        _useRequestedPixelSize = useRequestedPixelSize;
     }
 
     public Task RenderStarted => _renderStarted.Task;
@@ -82,7 +85,8 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         string filePath,
         int pageNumber = 0,
         float scale = 1f,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Avalonia.PixelSize? targetPixelSize = null)
     {
         lock (_renderedPages)
         {
@@ -97,6 +101,11 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
         // produces a bigger bitmap instead of the same fixed-size one.
         int width = _scaleRenderSize ? Math.Max(1, (int)Math.Round(_renderWidth * scale)) : _renderWidth;
         int height = _scaleRenderSize ? Math.Max(1, (int)Math.Round(_renderHeight * scale)) : _renderHeight;
+        if (_useRequestedPixelSize && targetPixelSize is { } requested)
+        {
+            width = requested.Width;
+            height = requested.Height;
+        }
         return new Avalonia.Media.Imaging.WriteableBitmap(
             new Avalonia.PixelSize(width, height),
             new Avalonia.Vector(96, 96),

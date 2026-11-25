@@ -14,11 +14,17 @@ public interface IPdfDocumentService
         int pageNumber,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Renders to the requested physical pixel size when supplied. The caller
+    /// computes it before converting scale to float so layout and rendering
+    /// share the same integer dimensions.
+    /// </summary>
     WriteableBitmap RenderPageToWriteableBitmap(
         string filePath,
         int pageNumber = 0,
         float scale = 1f,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Avalonia.PixelSize? targetPixelSize = null);
 
     List<PdfHighlight> LoadHighlights(string filePath, int pageNumber);
 

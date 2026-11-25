@@ -218,14 +218,13 @@ public partial class PdfDocumentView
         foreach (Control container in PageItems.GetRealizedContainers())
         {
             if (container.DataContext is not PdfPageViewModel page) continue;
-            Border? surface = container.GetVisualDescendants()
-                .OfType<Border>()
-                .FirstOrDefault(border => border.Name == "PageSurface");
-            if (surface is null) continue;
+            PdfPageImage? image = container.GetVisualDescendants().OfType<PdfPageImage>().FirstOrDefault();
+            if (image is null) continue;
 
-            point = e.GetPosition(surface);
-            if (point.X >= 0 && point.Y >= 0 && point.X <= surface.Bounds.Width && point.Y <= surface.Bounds.Height)
+            point = e.GetPosition(image);
+            if (image.Geometry.Bounds.Contains(point))
             {
+                point = image.Geometry.ToLogical(point);
                 pageIndex = page.PageIndex;
                 return true;
             }
@@ -246,14 +245,12 @@ public partial class PdfDocumentView
             foreach (Control container in PageItems.GetRealizedContainers())
             {
                 if (container.DataContext is not PdfPageViewModel page) continue;
-                Border? surface = container.GetVisualDescendants()
-                    .OfType<Border>()
-                    .FirstOrDefault(border => border.Name == "PageSurface");
-                if (surface is null) continue;
+                PdfPageImage? image = container.GetVisualDescendants().OfType<PdfPageImage>().FirstOrDefault();
+                if (image is null) continue;
 
-                Point point = e.GetPosition(surface);
-                if (point.X < 0 || point.Y < 0 || point.X > surface.Bounds.Width || point.Y > surface.Bounds.Height)
-                    continue;
+                Point point = e.GetPosition(image);
+                if (!image.Geometry.Bounds.Contains(point)) continue;
+                point = image.Geometry.ToLogical(point);
 
                 PdfTextHit? hit = document.HitTestText(page.PageIndex, point, nearestOnLine);
                 if (hit is not null)

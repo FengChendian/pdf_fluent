@@ -320,11 +320,12 @@
                                   HorizontalAlignment="Center">
                                 <Border x:Name="PageSurface" Width="{Binding PageWidth}" Height="{Binding PageHeight}"
                                         Classes="page-surface" VerticalAlignment="Top"
-                                        Background="#FFFFFF" CornerRadius="2" ClipToBounds="True">
+                                        Background="Transparent" CornerRadius="2">
                                     <Grid>
-                                        <Image Source="{Binding Image}" Stretch="Uniform"
-                                               RenderOptions.BitmapInterpolationMode="LowQuality" />
+                                        <controls:PdfPageImage x:Name="PageBitmap" Page="{Binding}"
+                                                               Document="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                         <controls:PdfPageOverlay Page="{Binding}"
+                                                                 PageImage="{Binding #PageBitmap}"
                                                                  Document="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                  IsHitTestVisible="False" />
                                         <ProgressBar Width="120" Height="4" IsIndeterminate="True"

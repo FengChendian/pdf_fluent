@@ -119,6 +119,7 @@ namespace pdf_fluent.Services
             }
         }
 
+        /// <summary>Renders premultiplied BGRA pixels, with alpha 255 on opaque pages.</summary>
         public (int width, int height, byte[] pixels) RenderPageToRawBuffer(
             string filePath,
             int pageNumber = 0,
@@ -129,7 +130,7 @@ namespace pdf_fluent.Services
         }
 
         /// <summary>
-        /// Renders multiple pages into raw byte buffers.
+        /// Renders multiple pages into premultiplied BGRA byte buffers.
         /// </summary>
         public (int width, int height, byte[] pixels)[] RenderPagesToRawBuffers(
             string filePath,
@@ -149,27 +150,33 @@ namespace pdf_fluent.Services
             string filePath,
             int pageNumber = 0,
             float scale = 1f,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            PixelSize? targetPixelSize = null)
         {
+            if (targetPixelSize is { } size && (size.Width <= 0 || size.Height <= 0))
+                throw new ArgumentOutOfRangeException(nameof(targetPixelSize));
+            WriteableBitmap result;
+            bool needsPremultiplication = false;
             lock (_pageLock)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var document = GetOrLoadDocument(filePath);
                 StartupTrace.Mark($"PDFiumService.RenderPageToWriteableBitmap.enter (page {pageNumber})");
-                var result = RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
+                result = RenderSinglePage(document, pageNumber, scale, (page, width, height, hasTransparency) =>
                 {
+                    needsPremultiplication = hasTransparency;
                     cancellationToken.ThrowIfCancellationRequested();
                     var bitmap = new WriteableBitmap(
                         new PixelSize(width, height),
                         new Vector(96, 96),
                         PixelFormat.Bgra8888,
-                        AlphaFormat.Premul);
+                        hasTransparency ? AlphaFormat.Premul : AlphaFormat.Opaque);
                     try
                     {
                         using (var target = bitmap.Lock())
                         {
                             RenderPageIntoBuffer(
-                                page, width, height, target.Address, target.RowBytes, cancellationToken);
+                                page, width, height, target.Address, target.RowBytes, hasTransparency, cancellationToken);
                         }
 
                         return bitmap;
@@ -179,9 +186,26 @@ namespace pdf_fluent.Services
                         bitmap.Dispose();
                         throw;
                     }
-                });
+                }, targetPixelSize);
+            }
+
+            try
+            {
+                // Native handles are closed now. CPU-only conversion must not
+                // block text extraction or other documents on PDFium's lock.
+                if (needsPremultiplication)
+                {
+                    using var target = result.Lock();
+                    PremultiplyBitmap(target.Address, result.PixelSize.Width, result.PixelSize.Height,
+                        target.RowBytes, cancellationToken);
+                }
                 StartupTrace.Mark($"PDFiumService.RenderPageToWriteableBitmap.exit (page {pageNumber})");
                 return result;
+            }
+            catch
+            {
+                result.Dispose();
+                throw;
             }
         }
 
@@ -254,7 +278,7 @@ namespace pdf_fluent.Services
             int pageNumber,
             float scale)
         {
-            return RenderSinglePage(document, pageNumber, scale, (page, width, height) =>
+            return RenderSinglePage(document, pageNumber, scale, (page, width, height, hasTransparency) =>
             {
                 byte[] pixels = new byte[checked(width * height * 4)];
                 unsafe
@@ -262,9 +286,17 @@ namespace pdf_fluent.Services
                     fixed (byte* buffer = pixels)
                     {
                         RenderPageIntoBuffer(
-                            page, width, height, (IntPtr)buffer, width * 4, CancellationToken.None);
+                            page, width, height, (IntPtr)buffer, width * 4, hasTransparency, CancellationToken.None);
+                        if (hasTransparency)
+                            PremultiplyBitmap((IntPtr)buffer, width, height, width * 4, CancellationToken.None);
                     }
                 }
+
+                // BGRx's fourth byte is unused by PDFium. The raw-buffer API
+                // promises BGRA, so make its alpha explicit before publishing.
+                if (!hasTransparency)
+                    for (int offset = 3; offset < pixels.Length; offset += 4)
+                        pixels[offset] = byte.MaxValue;
 
                 return (width, height, pixels);
             });
@@ -274,7 +306,8 @@ namespace pdf_fluent.Services
             FpdfDocumentT document,
             int pageNumber,
             float scale,
-            Func<FpdfPageT, int, int, T> render)
+            Func<FpdfPageT, int, int, bool, T> render,
+            PixelSize? targetPixelSize = null)
         {
             FpdfPageT page;
             int width;
@@ -287,13 +320,18 @@ namespace pdf_fluent.Services
                        ?? throw new InvalidOperationException($"无法加载 PDF 第 {pageNumber + 1} 页。");
                 HideHighlightAnnotations(page);
                 fpdfview.FPDF_GetPageSizeByIndex(document, pageNumber, ref pageWidth, ref pageHeight);
-                width = Math.Max(1, (int)(pageWidth * scale));
-                height = Math.Max(1, (int)(pageHeight * scale));
+                PixelSize pixels = targetPixelSize ?? PdfPageGeometry.GetPixelSize(pageWidth, pageHeight, scale);
+                width = pixels.Width;
+                height = pixels.Height;
             }
 
             try
             {
-                return render(page, width, height);
+                // Like Chromium, ask whether PDFium needs background alpha;
+                // simple object opacity alone need not require an alpha target.
+                bool hasTransparency;
+                lock (_pageLock) hasTransparency = fpdf_edit.FPDFPageHasTransparency(page) != 0;
+                return render(page, width, height, hasTransparency);
             }
             finally
             {
@@ -307,6 +345,7 @@ namespace pdf_fluent.Services
             int height,
             IntPtr buffer,
             int stride,
+            bool hasTransparency,
             CancellationToken cancellationToken)
         {
             const int renderToBeContinued = 1;
@@ -315,8 +354,11 @@ namespace pdf_fluent.Services
             lock (_pageLock)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                // Match Chromium: alpha targets disable AGG's LCD subpixel
+                // output, even when every pixel was initially filled white.
+                var format = hasTransparency ? FPDFBitmapFormat.BGRA : FPDFBitmapFormat.BGRx;
                 var bitmap = fpdfview.FPDFBitmapCreateEx(
-                    width, height, (int)FPDFBitmapFormat.BGRA, buffer, stride);
+                    width, height, (int)format, buffer, stride);
                 if (bitmap == null)
                     throw new InvalidOperationException("无法创建 PDFium 位图。");
 
@@ -332,10 +374,13 @@ namespace pdf_fluent.Services
                 pause.NeedToPauseNow = needToPauseNow;
                 try
                 {
-                    fpdfview.FPDFBitmapFillRect(bitmap, 0, 0, width, height, uint.MaxValue);
+                    // Blend against transparency first; the page control draws
+                    // the white paper underneath the completed bitmap.
+                    uint clearColor = hasTransparency ? 0u : uint.MaxValue;
+                    fpdfview.FPDFBitmapFillRect(bitmap, 0, 0, width, height, clearColor);
                     int status = fpdf_progressive.FPDF_RenderPageBitmapStart(
                         bitmap, page, 0, 0, width, height, 0,
-                        (int)RenderFlags.RenderAnnotations, pause);
+                        (int)(RenderFlags.RenderAnnotations | RenderFlags.OptimizeTextForLcd), pause);
                     while (status == renderToBeContinued && !cancellationToken.IsCancellationRequested)
                         status = fpdf_progressive.FPDF_RenderPageContinue(page, pause);
 
@@ -353,6 +398,42 @@ namespace pdf_fluent.Services
             }
         }
 
+        internal static unsafe void PremultiplyBitmap(
+            IntPtr buffer, int width, int height, int stride, CancellationToken cancellationToken)
+        {
+            // Work on packed channels rather than dividing each color byte.
+            // B/R occupy independent 16-bit lanes; (n + 128 + ((n + 128)
+            // >> 8)) >> 8 is exact rounded division by 255 for byte products.
+            for (int y = 0; y < height; y++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                byte* pixel = (byte*)buffer + (long)y * stride;
+                for (int x = 0; x < width; x++, pixel += 4)
+                {
+                    if (BitConverter.IsLittleEndian)
+                    {
+                        uint bgra = *(uint*)pixel;
+                        uint alpha = bgra >> 24;
+                        if (alpha == 255) continue;
+                        uint rb = (bgra & 0x00FF00FFu) * alpha + 0x00800080u;
+                        uint g = (bgra & 0x0000FF00u) * alpha + 0x00008000u;
+                        rb = ((rb + ((rb >> 8) & 0x00FF00FFu)) >> 8) & 0x00FF00FFu;
+                        g = ((g + ((g >> 8) & 0x0000FF00u)) >> 8) & 0x0000FF00u;
+                        *(uint*)pixel = rb | g | (bgra & 0xFF000000u);
+                    }
+                    else
+                    {
+                        int alpha = pixel[3];
+                        if (alpha == 255) continue;
+                        pixel[0] = (byte)((pixel[0] * alpha + 127) / 255);
+                        pixel[1] = (byte)((pixel[1] * alpha + 127) / 255);
+                        pixel[2] = (byte)((pixel[2] * alpha + 127) / 255);
+                    }
+                }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         // ════════════════════════════════════════════════════════════════
         //  Bitmap helpers
         // ════════════════════════════════════════════════════════════════
@@ -367,7 +448,7 @@ namespace pdf_fluent.Services
             }
         }
 
-        /// <summary>Creates a <see cref="WriteableBitmap"/> from raw BGRA pixel data.</summary>
+        /// <summary>Creates a <see cref="WriteableBitmap"/> from premultiplied BGRA pixel data.</summary>
         public static WriteableBitmap CreateWriteableBitmapFromRawBuffer(int width, int height, byte[] pixelData)
         {
             var expectedLength = checked(width * height * 4);

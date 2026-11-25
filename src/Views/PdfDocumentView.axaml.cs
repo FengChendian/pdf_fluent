@@ -28,6 +28,7 @@ public partial class PdfDocumentView : UserControl
     private IDisposable? _tocCloseTimer;
     private DocumentTabViewModel? _observedDocument;
     private Vector? _scrollOffsetToRestore;
+    private bool _deferredPageRenders;
     private int _lastObservedPageNumber = 1;
     private int? _pendingPageIndex;
 
@@ -396,6 +397,13 @@ public partial class PdfDocumentView : UserControl
 
     private void OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
     {
+        // A reused reader initially realizes containers at the previous tab's
+        // offset. Wait for restoration before starting work for those pages.
+        if (_scrollOffsetToRestore is not null)
+        {
+            _deferredPageRenders = true;
+            return;
+        }
         if (DataContext is DocumentTabViewModel document &&
             e.Container.DataContext is PdfPageViewModel page)
         {
@@ -404,20 +412,23 @@ public partial class PdfDocumentView : UserControl
         }
     }
 
-    private void RestoreScrollOffset(DocumentTabViewModel document)
+    private bool RestoreScrollOffset(DocumentTabViewModel document)
     {
         if (_scrollOffsetToRestore is not Vector offset ||
             document.PageCount == 0 || DocumentScroller.Extent.Height <= 0)
         {
-            return;
+            return false;
         }
 
         _scrollOffsetToRestore = null;
         double maxX = Math.Max(0, DocumentScroller.Extent.Width - DocumentScroller.Viewport.Width);
         double maxY = Math.Max(0, DocumentScroller.Extent.Height - DocumentScroller.Viewport.Height);
-        DocumentScroller.Offset = new Vector(
+        Vector restored = new(
             Math.Clamp(offset.X, 0, maxX),
             Math.Clamp(offset.Y, 0, maxY));
+        bool changed = DocumentScroller.Offset != restored;
+        DocumentScroller.Offset = restored;
+        return changed;
     }
 
     private void OnPagesLayoutUpdated(object? sender, EventArgs e)
@@ -430,7 +441,10 @@ public partial class PdfDocumentView : UserControl
             return;
         }
 
-        RestoreScrollOffset(document);
+        // Changing the offset schedules another layout with the correct
+        // realization range. The current containers still belong to the old
+        // viewport and must not enqueue renders or overwrite CurrentPage.
+        if (RestoreScrollOffset(document) || _scrollOffsetToRestore is not null) return;
         var panel = itemsControl.GetVisualDescendants().OfType<PdfVirtualizingPanel>().FirstOrDefault();
         List<PdfPageViewModel> realizedPages = [];
         List<PdfPageViewModel> visiblePages = [];
@@ -444,6 +458,12 @@ public partial class PdfDocumentView : UserControl
 
         document.SyncRealizedPages(
             realizedPages, visiblePages, panel?.ScrollDirection ?? 0, panel?.CurrentPageIndex);
+        if (_deferredPageRenders)
+        {
+            _deferredPageRenders = false;
+            foreach (PdfPageViewModel page in realizedPages)
+                document.EnsurePageRendered(page, visiblePages.Contains(page));
+        }
         // Layout has settled the actual page, even when the requested page
         // cannot reach the viewport top because scrolling is clamped at the end.
         // Keep pending targets only between clicks before this layout pass.

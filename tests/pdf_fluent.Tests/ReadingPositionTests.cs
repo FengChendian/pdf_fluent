@@ -14,6 +14,29 @@ namespace pdf_fluent.Tests;
 public sealed class ReadingPositionTests
 {
     [AvaloniaFact]
+    public async Task OpeningAtSavedOffsetOnlyRendersTheRestoredViewport()
+    {
+        using var service = new FakePdfDocumentService(20);
+        using var document = new DocumentTabViewModel("saved.pdf", service, new Vector(0, 6000));
+        await document.LoadAsync();
+        service.AllowRenders();
+        var reader = new PdfDocumentView { DataContext = document };
+        var window = new Window { Width = 1000, Height = 800, Content = reader };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            await PdfTestHelpers.WaitUntilAsync(() => service.RenderCallCount > 0 && document.PendingRenderCount == 0);
+            int[] realized = reader.PageItems.GetRealizedContainers()
+                .Select(container => ((PdfPageViewModel)container.DataContext!).PageIndex).ToArray();
+            Assert.Equal(6000, reader.DocumentScroller.Offset.Y, precision: 1);
+            Assert.DoesNotContain(0, service.RenderedPages);
+            Assert.All(service.RenderedPages, index => Assert.Contains(index, realized));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public async Task SwitchingTabsAndHomeReusesBitmapsAndClosingReleasesOnlyThatTab()
     {
         string directory = Path.Combine(Path.GetTempPath(), "pdf_fluent-tests", Guid.NewGuid().ToString("N"));

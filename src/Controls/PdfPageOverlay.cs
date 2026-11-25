@@ -18,7 +18,17 @@ public sealed class PdfPageOverlay : Control
     public static readonly StyledProperty<DocumentTabViewModel?> DocumentProperty =
         AvaloniaProperty.Register<PdfPageOverlay, DocumentTabViewModel?>(nameof(Document));
 
+    public static readonly StyledProperty<PdfPageImage?> PageImageProperty =
+        AvaloniaProperty.Register<PdfPageOverlay, PdfPageImage?>(nameof(PageImage));
+
     private PdfPageViewModel? _subscribedPage;
+    private PdfPageImage? _subscribedImage;
+
+    public PdfPageImage? PageImage
+    {
+        get => GetValue(PageImageProperty);
+        set => SetValue(PageImageProperty, value);
+    }
 
     public PdfPageViewModel? Page
     {
@@ -36,6 +46,7 @@ public sealed class PdfPageOverlay : Control
     {
         PageProperty.Changed.AddClassHandler<PdfPageOverlay>((overlay, _) => overlay.SubscribeToPage());
         DocumentProperty.Changed.AddClassHandler<PdfPageOverlay>((overlay, _) => overlay.InvalidateVisual());
+        PageImageProperty.Changed.AddClassHandler<PdfPageOverlay>((overlay, _) => overlay.SubscribeToImage());
     }
 
     public override void Render(DrawingContext context)
@@ -71,11 +82,12 @@ public sealed class PdfPageOverlay : Control
     {
         PdfRect cropBox = Page!.Text!.CropBox;
         double scale = DocumentTabViewModel.LayoutScale * Page.Zoom;
-        return new Rect(
+        var logical = new Rect(
             (rect.L - cropBox.L) * scale,
             (cropBox.T - rect.T) * scale,
             rect.Width * scale,
             rect.Height * scale);
+        return PageImage is { } image ? image.Geometry.FromLogical(logical) : logical;
     }
 
     private void DrawRect(
@@ -103,12 +115,15 @@ public sealed class PdfPageOverlay : Control
     {
         base.OnAttachedToVisualTree(e);
         SubscribeToPage();
+        SubscribeToImage();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         if (_subscribedPage is not null) _subscribedPage.PropertyChanged -= OnPagePropertyChanged;
         _subscribedPage = null;
+        if (_subscribedImage is not null) _subscribedImage.GeometryChanged -= OnGeometryChanged;
+        _subscribedImage = null;
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -125,4 +140,14 @@ public sealed class PdfPageOverlay : Control
         if (e.PropertyName is nameof(PdfPageViewModel.Text) or nameof(PdfPageViewModel.TextOverlayVersion))
             InvalidateVisual();
     }
+
+    private void SubscribeToImage()
+    {
+        if (_subscribedImage is not null) _subscribedImage.GeometryChanged -= OnGeometryChanged;
+        _subscribedImage = PageImage;
+        if (_subscribedImage is not null) _subscribedImage.GeometryChanged += OnGeometryChanged;
+        InvalidateVisual();
+    }
+
+    private void OnGeometryChanged(object? sender, EventArgs e) => InvalidateVisual();
 }
