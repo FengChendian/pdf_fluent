@@ -21,7 +21,8 @@ public sealed class SingleInstanceCoordinatorTests
 
         Assert.True(primary.IsPrimary);
         Assert.False(secondary.IsPrimary);
-        Assert.True(await secondary.TrySendAsync(sentArgs));
+        Assert.True(await secondary.TrySendAsync(sentArgs),
+            "命名管道参数转发失败。请检查超时或管道访问权限；受限沙箱可能拒绝本机命名管道连接。");
         Assert.Equal(sentArgs, await received.Task.WaitAsync(
             TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }

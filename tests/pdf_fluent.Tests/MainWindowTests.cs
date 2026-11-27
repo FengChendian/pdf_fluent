@@ -373,7 +373,8 @@ public sealed class MainWindowTests
             var content = window.FindControl<Grid>("WorkspaceContent")!;
             Assert.True(chrome.IsActive);
             Assert.False(chrome.IsHitTestVisible);
-            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            Color selected = Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color;
+            Assert.Equal(Colors.White, selected);
             Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
             Assert.Equal(40, tab.Bounds.Height);
             Assert.Equal(content.TranslatePoint(default, window)!.Value.Y,
@@ -389,13 +390,15 @@ public sealed class MainWindowTests
             vm.ShowHomeCommand.Execute(null);
             window.UpdateLayout();
             Assert.False(chrome.IsActive);
-            Color strip = Color.Parse("#EEF1F7");
-            Color hover = Color.Parse("#DDE3ED");
-            Assert.Equal(3, new[] { strip, hover, Colors.White }.Distinct().Count());
+            var stripSurface = Assert.IsType<Border>(window.FindControl<Grid>("TabStripLayout")!.GetVisualParent());
+            Color strip = Assert.IsAssignableFrom<ISolidColorBrush>(stripSurface.Background).Color;
+            Assert.Equal(Color.Parse("#EEF1F7"), strip);
             window.MouseMove(new Point(10, 10));
             Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
             window.MouseMove(tab.TranslatePoint(new Point(40, 20), window)!.Value);
-            Assert.Equal(hover, Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color);
+            Color hover = Assert.IsAssignableFrom<ISolidColorBrush>(chrome.Fill).Color;
+            Assert.Equal(Color.Parse("#DDE3ED"), hover);
+            Assert.Equal(3, new[] { strip, hover, selected }.Distinct().Count());
             Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
 
             var workspaceTab = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("WorkspaceTopTab")!;

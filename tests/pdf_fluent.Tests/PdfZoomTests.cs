@@ -807,35 +807,10 @@ public sealed class PdfZoomTests
         Assert.Null(harness.Panel.RenderTransform);
     }
 
-    [AvaloniaFact]
-    public async Task ClosingTheWindowMidAnimationReleasesRendering()
-    {
-        ZoomTestHarness harness = await ZoomTestHarness.CreateAsync(windowWidth: 1000, windowHeight: 700);
-        try
-        {
-            (PdfPageViewModel page, Rect before) = harness.PageAt(0);
-            Point pointer = new(before.X + (before.Width * 0.5), before.Y + (before.Height * 0.4));
-            PdfZoomController controller = harness.Zoom;
-
-            controller.ZoomTo(1.25, pointer);
-            controller.Advance(TimeSpan.FromMilliseconds(60));
-            Assert.True(harness.Document.IsRenderingSuspended);
-
-            harness.Window.Close();
-
-            Assert.False(controller.IsAnimating);
-            Assert.False(controller.HasCompositionAnimation);
-            Assert.False(harness.Document.IsRenderingSuspended);
-            Assert.Null(harness.View.ZoomController);
-        }
-        finally
-        {
-            harness.Dispose();
-        }
-    }
-
-    [AvaloniaFact]
-    public async Task RemovingTheDocumentViewMidAnimationDetachesTheController()
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LeavingTheReaderMidAnimationDetachesTheController(bool closeWindow)
     {
         using ZoomTestHarness harness = await ZoomTestHarness.CreateAsync(windowWidth: 1000, windowHeight: 700);
 
@@ -844,10 +819,13 @@ public sealed class PdfZoomTests
         PdfZoomController controller = harness.Zoom;
 
         controller.ZoomTo(1.25, pointer);
-        controller.Advance(TimeSpan.FromMilliseconds(50));
+        controller.Advance(TimeSpan.FromMilliseconds(60));
         Assert.True(harness.Document.IsRenderingSuspended);
 
-        harness.Window.Content = null;
+        if (closeWindow)
+            harness.Window.Close();
+        else
+            harness.Window.Content = null;
         harness.UpdateLayout();
 
         Assert.False(controller.IsAnimating);

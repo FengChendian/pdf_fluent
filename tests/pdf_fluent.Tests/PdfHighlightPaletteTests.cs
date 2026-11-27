@@ -39,12 +39,37 @@ public sealed class PdfHighlightPaletteTests
         ((Action<double>?)type.GetProperty("ScalingChanged")!.GetValue(impl))?.Invoke(scaling);
         reader.Window.UpdateLayout();
         var view = reader.View;
+        var header = Named<Border>(view, "ReaderHeader");
+        double headerBottom = header.TranslatePoint(new Point(0, header.Bounds.Height), view)!.Value.Y;
+        Assert.Equal(48, headerBottom, precision: 1);
+
+        double AssertFlyoutPlacement(string overlayName, string panelName, string pointerName, Control anchor)
+        {
+            var overlay = Named<Grid>(view, overlayName);
+            var panel = Named<Border>(view, panelName);
+            var pointer = Named<Path>(view, pointerName);
+            Assert.True(overlay.IsVisible);
+            double pointerTop = pointer.TranslatePoint(default, view)!.Value.Y;
+            double anchorBottom = anchor.TranslatePoint(new Point(0, anchor.Bounds.Height), view)!.Value.Y;
+            double gap = pointerTop - anchorBottom;
+            // Preserve the original anchor-gap check at 100% DPI; fractional DPI
+            // rounds the centered toolbar separately from the flyout surface.
+            if (scaling == 1)
+                Assert.Equal(1, gap, precision: 1);
+            // The pointer and panel share the header-based placement at every DPI.
+            Assert.InRange(Math.Abs(pointerTop - (headerBottom - 7)) * scaling, 0, 0.501);
+            Assert.Equal(pointerTop, overlay.TranslatePoint(default, view)!.Value.Y, 6);
+            Assert.Equal(8, panel.TranslatePoint(default, view)!.Value.Y - pointerTop, 6);
+            return gap;
+        }
+
         Click(reader.Window, view.HighlightButton);
         await Task.Delay(260);
         reader.Window.UpdateLayout();
         var palette = Named<Border>(view, "HighlightPalettePanel");
-        double headerBottom = Named<Border>(view, "ReaderHeader").Bounds.Bottom;
         double paletteGap = palette.TranslatePoint(default, view)!.Value.Y - headerBottom;
+        double paletteAnchorGap = AssertFlyoutPlacement("HighlightPaletteOverlay", "HighlightPalettePanel",
+            "HighlightPalettePointer", view.HighlightButton);
         var palettePointer = Named<Path>(view, "HighlightPalettePointer");
         Assert.InRange(Math.Abs(Center(view.HighlightButton, view).X - Center(palettePointer, view).X),
             0, 0.501 / scaling);
@@ -54,6 +79,10 @@ public sealed class PdfHighlightPaletteTests
         reader.Window.UpdateLayout();
         var jump = Named<Border>(view, "PageJumpPanel");
         double jumpGap = jump.TranslatePoint(default, view)!.Value.Y - headerBottom;
+        double jumpAnchorGap = AssertFlyoutPlacement("PageJumpOverlay", "PageJumpPanel",
+            "PageJumpPointer", Named<Border>(view, "PageNavigation"));
+        if (scaling == 1)
+            Assert.Equal(paletteAnchorGap, jumpAnchorGap, precision: 1);
         Assert.Equal(jumpGap, paletteGap, 6);
         // Layout rounding can move the one-DIP gap by half a physical pixel.
         Assert.InRange(Math.Abs(jumpGap - 1) * scaling, 0, 0.501);
@@ -62,6 +91,8 @@ public sealed class PdfHighlightPaletteTests
         await Task.Delay(260);
         reader.Window.UpdateLayout();
         var toc = Named<Border>(view, "TableOfContentsPanel");
+        AssertFlyoutPlacement("TableOfContentsOverlay", "TableOfContentsPanel", "TableOfContentsPointer",
+            Named<Avalonia.Controls.Primitives.ToggleButton>(view, "TableOfContentsButton"));
         Assert.Equal(jumpGap, toc.TranslatePoint(default, view)!.Value.Y - headerBottom, 6);
         Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(jump.Background).Color,
             Assert.IsAssignableFrom<ISolidColorBrush>(palette.Background).Color);

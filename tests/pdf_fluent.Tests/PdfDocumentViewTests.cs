@@ -658,46 +658,6 @@ public sealed class PdfDocumentViewTests
     }
 
     [AvaloniaFact]
-    public async Task TocAndPageJumpPanelsShareTheSameTopOffset()
-    {
-        using var service = new FakePdfDocumentService(3);
-        using var document = new DocumentTabViewModel("unused.pdf", service);
-        await document.LoadAsync();
-        var view = new PdfDocumentView { DataContext = document };
-        var window = new Window { Width = 1200, Height = 900, Content = view };
-        try
-        {
-            window.Show(); window.UpdateLayout();
-            double headerBottom = Named<Border>(view, "ReaderHeader")
-                .TranslatePoint(new Point(0, Named<Border>(view, "ReaderHeader").Bounds.Height), view)!.Value.Y;
-            Assert.Equal(48, headerBottom, precision: 1);
-
-            var tocButton = Named<Avalonia.Controls.Primitives.ToggleButton>(view, "TableOfContentsButton");
-            tocButton.IsChecked = true;
-            window.UpdateLayout();
-            await Task.Delay(260);
-            window.UpdateLayout();
-            Assert.Equal(headerBottom + 1,
-                Named<Border>(view, "TableOfContentsPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
-            Assert.Equal(headerBottom - 7,
-                Named<Path>(view, "TableOfContentsPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
-
-            tocButton.IsChecked = false;
-            window.UpdateLayout();
-            await Task.Delay(260);
-            Click(window, Named<TextBlock>(view, "PageIndicatorText"));
-            window.UpdateLayout();
-            await Task.Delay(260);
-            window.UpdateLayout();
-            Assert.Equal(headerBottom + 1,
-                Named<Border>(view, "PageJumpPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
-            Assert.Equal(headerBottom - 7,
-                Named<Path>(view, "PageJumpPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public async Task PageJumpPanelUsesTheBezierPointerAndFloatsOverThePage()
     {
         using var service = new FakePdfDocumentService(3);
