@@ -1,5 +1,4 @@
 param(
-    [Parameter(Mandatory = $true)][string]$ApplicationPath,
     [Parameter(Mandatory = $true)][int]$ParentProcessId,
     [Parameter(Mandatory = $true)][string]$ExpectedHash
 )
@@ -10,51 +9,86 @@ $InstallerPath = Join-Path $updateDirectory 'installer.exe'
 $readyPath = Join-Path $updateDirectory 'ready'
 $commitPath = Join-Path $updateDirectory 'commit'
 $logPath = Join-Path $updateDirectory 'update.log'
-$restartApplication = $false
+$updateWasCommitted = $false
 $parentProcess = $null
+
+function Get-InstalledApplicationPath {
+    # Keep the AppId in sync with installer/PDFFluent.iss. The current installer
+    # uses administrative, 64-bit install mode, so read the matching registry view.
+    $uninstallSubKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{C5925B07-56D3-41C5-B506-DE3F00F7CC02}_is1'
+    $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::LocalMachine,
+        [Microsoft.Win32.RegistryView]::Registry64)
+    $installation = $null
+    try {
+        $installation = $registry.OpenSubKey($uninstallSubKey)
+        if ($null -eq $installation) {
+            throw 'The Fluent PDF installation record could not be found.'
+        }
+        $directory = [string]$installation.GetValue('InstallLocation')
+        if ([string]::IsNullOrWhiteSpace($directory) -or -not [System.IO.Path]::IsPathRooted($directory)) {
+            throw 'The Fluent PDF installation directory is invalid.'
+        }
+        $executable = Join-Path $directory 'pdf_fluent.exe'
+        if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw 'The installed Fluent PDF executable could not be found.'
+        }
+        return $executable
+    }
+    finally {
+        if ($null -ne $installation) { $installation.Dispose() }
+        $registry.Dispose()
+    }
+}
+
 try {
     $parentProcess = Get-Process -Id $ParentProcessId -ErrorAction Stop
     # The parent keeps running if this helper cannot reach its ready state.
     [System.IO.File]::WriteAllText($readyPath, '')
     if (-not $parentProcess.WaitForExit(1800000)) { return }
     if (-not (Test-Path -LiteralPath $commitPath)) { return }
-    $restartApplication = $true
+    $updateWasCommitted = $true
 
     # Recheck immediately before elevation, after the reader has released its files.
     if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash -ne $ExpectedHash) {
         throw 'The update installer failed SHA-256 verification.'
     }
-    $installDirectory = Split-Path -Parent $ApplicationPath
     $installerArguments = @(
         '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
         '/NOCLOSEAPPLICATIONS', '/NORESTARTAPPLICATIONS', '/RESTARTEXITCODE=3010',
-        ('/DIR="{0}"' -f $installDirectory),
         ('/LOG="{0}"' -f $logPath)
     )
+    # Do not pass /DIR: Inno Setup resolves the previous installation itself.
     # This helper stays under the original user. Only the installer is elevated;
     # the relaunched reader must not inherit administrator privileges.
     $installer = Start-Process -FilePath $InstallerPath -ArgumentList $installerArguments `
         -Verb RunAs -WindowStyle Hidden -Wait -PassThru
     try {
         if ($installer.ExitCode -eq 3010) {
-            $restartApplication = $false
             Add-Type -AssemblyName System.Windows.Forms
             [System.Windows.Forms.MessageBox]::Show(
                 'The update requires a Windows restart to finish. Please restart Windows before opening Fluent PDF.',
                 'Fluent PDF update') | Out-Null
+            return
         }
         elseif ($installer.ExitCode -ne 0) {
             throw "The installer exited with code $($installer.ExitCode). See $logPath"
         }
     }
     finally { $installer.Dispose() }
+
+    # Read the successful install's actual location instead of relaunching the
+    # caller, which may have been a Debug build or a portable copy.
+    $applicationToRestart = Get-InstalledApplicationPath
+    Start-Process -FilePath $applicationToRestart `
+        -WorkingDirectory (Split-Path -Parent $applicationToRestart) -WindowStyle Normal
 }
 catch {
     $_.ToString() | Out-File -LiteralPath $logPath -Append -Encoding utf8
-    if ($restartApplication) {
+    if ($updateWasCommitted) {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "The update was cancelled or could not be completed. Fluent PDF will reopen.`nLog: $logPath",
+            "The update was cancelled, failed, or Fluent PDF could not be reopened. Please open Fluent PDF manually.`nLog: $logPath",
             'Fluent PDF update') | Out-Null
     }
 }
@@ -71,8 +105,5 @@ finally {
             }
             catch { Start-Sleep -Milliseconds 500 }
         }
-    }
-    if ($restartApplication -and (Test-Path -LiteralPath $ApplicationPath)) {
-        Start-Process -FilePath $ApplicationPath -WorkingDirectory (Split-Path -Parent $ApplicationPath)
     }
 }

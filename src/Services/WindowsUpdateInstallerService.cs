@@ -33,9 +33,8 @@ public sealed class WindowsUpdateInstallerService : IUpdateInstallerService, IDi
     public async Task<IPreparedUpdate> PrepareAsync(
         UpdatePackage package, IProgress<int>? progress, CancellationToken cancellationToken)
     {
-        if (!OperatingSystem.IsWindows() ||
-            !string.Equals(Path.GetFileName(Environment.ProcessPath), "pdf_fluent.exe", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("请从已安装的 Windows 应用中执行更新。");
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("自动安装更新仅支持 Windows。");
 
         string directory = Path.Combine(Path.GetTempPath(), "FluentPDF-Updates", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -63,7 +62,7 @@ public sealed class WindowsUpdateInstallerService : IUpdateInstallerService, IDi
                      {
                          "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
                          "-File", scriptPath,
-                         "-ApplicationPath", Environment.ProcessPath!, "-ParentProcessId", Environment.ProcessId.ToString(),
+                         "-ParentProcessId", Environment.ProcessId.ToString(),
                          "-ExpectedHash", package.Sha256,
                      })
                 startInfo.ArgumentList.Add(argument);

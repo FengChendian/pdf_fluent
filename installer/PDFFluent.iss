@@ -20,6 +20,7 @@ AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=Fluent PDF
 DefaultDirName={autopf}\Fluent PDF
+UsePreviousAppDir=yes
 DefaultGroupName=Fluent PDF
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
