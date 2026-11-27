@@ -86,7 +86,7 @@ public sealed class SettingsViewTests
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             Assert.True(spinner.IsVisible);
-            Assert.False(action.IsEnabled);
+            Assert.False(action.IsEffectivelyEnabled);
             var prepared = new UpdateTestData.PreparedUpdate();
             download.SetResult(prepared);
             await updating;
