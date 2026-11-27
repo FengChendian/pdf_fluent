@@ -54,6 +54,8 @@
 设置中的“下载并更新”会从公开域名流式下载安装包，同时检查大小和 SHA-256。
 下载完成后先确认未保存的 PDF 高亮；取消或保存失败时保持应用打开，并回收本次下载文件。
 确认关闭后，独立 Windows PowerShell 辅助进程等待阅读器完全退出，再启动 Inno Setup 静默更新。
+使用 `/SILENT` 并正常显示安装器窗口：跳过安装向导，显示 Inno 自带的安装进度条；
+PowerShell 辅助进程仍隐藏运行。不要改为 `/VERYSILENT` 或隐藏安装器窗口，否则安装进度将不可见。
 不传入 `/DIR`，由 Inno Setup 的 `UsePreviousAppDir=yes` 自动识别已有安装目录；
 未安装时使用安装器默认目录。只提升安装器权限，安装成功后辅助进程从 HKLM 的 64 位卸载注册表中，
 按安装器 `AppId` 查找 `InstallLocation`，再以原用户权限启动该目录中的 `pdf_fluent.exe`。
@@ -64,6 +66,20 @@ Windows 的 UAC 确认仍需用户操作；取消 UAC、安装失败或无法启
 
 辅助进程会重试删除安装包、自身脚本和交接标记。安装日志保留在
 `%TEMP%\FluentPDF-Updates\<本次更新 ID>\update.log`，便于定位安装故障。
+安装包下载到同一目录中的 `installer.exe`，不使用 Windows 的“下载”文件夹；
+实际临时目录由 `Path.GetTempPath()` 决定，通常为 `%LOCALAPPDATA%\Temp`。
+在资源管理器地址栏输入 `%TEMP%\FluentPDF-Updates` 即可查看各次更新。
+安装结束并等待辅助进程清理后，正常应只剩 `update.log`；目录和日志保留不代表安装包未删除。
+可在 PowerShell 中检查是否有残留安装包（无输出表示当前没有）：
+
+```powershell
+Get-ChildItem -LiteralPath (Join-Path ([System.IO.Path]::GetTempPath()) 'FluentPDF-Updates') `
+    -Filter installer.exe -Recurse -File -ErrorAction SilentlyContinue |
+    Select-Object FullName, Length, LastWriteTime
+```
+
+清理对每个文件最多尝试 10 次，失败后间隔 500 毫秒；文件持续被占用等情况下仍可能残留，
+当前 `update.log` 不记录清理结果，因此应以文件是否实际存在为准。
 企业策略禁用 Windows PowerShell 时，辅助进程无法就绪，阅读器会保持打开并提示更新失败。
 当前方案沿用既有 Inno Setup 安装标识和路径，属于全量安装包更新，不提供增量更新或自动回滚。
 

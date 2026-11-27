@@ -54,15 +54,17 @@ try {
         throw 'The update installer failed SHA-256 verification.'
     }
     $installerArguments = @(
-        '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
+        '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
         '/NOCLOSEAPPLICATIONS', '/NORESTARTAPPLICATIONS', '/RESTARTEXITCODE=3010',
         ('/LOG="{0}"' -f $logPath)
     )
     # Do not pass /DIR: Inno Setup resolves the previous installation itself.
+    # /SILENT skips the wizard but shows Inno's progress window. Keep the
+    # installer window visible; only the PowerShell helper runs hidden.
     # This helper stays under the original user. Only the installer is elevated;
     # the relaunched reader must not inherit administrator privileges.
     $installer = Start-Process -FilePath $InstallerPath -ArgumentList $installerArguments `
-        -Verb RunAs -WindowStyle Hidden -Wait -PassThru
+        -Verb RunAs -WindowStyle Normal -Wait -PassThru
     try {
         if ($installer.ExitCode -eq 3010) {
             Add-Type -AssemblyName System.Windows.Forms
