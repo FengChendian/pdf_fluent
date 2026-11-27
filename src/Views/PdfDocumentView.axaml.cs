@@ -35,6 +35,7 @@ public partial class PdfDocumentView : UserControl
     public PdfDocumentView()
     {
         InitializeComponent();
+        InitializeHighlightPalette();
         InitializeTextInteraction();
         DocumentScroller.ScrollChanged += OnDocumentScrollChanged;
         TableOfContentsButton.IsCheckedChanged += OnTableOfContentsButtonToggled;
@@ -83,6 +84,8 @@ public partial class PdfDocumentView : UserControl
         HidePageIndicator();
         CloseTableOfContentsImmediately();
         ClosePageJump();
+        CloseHighlightPalette();
+        _usingCustomHighlightColor = false;
         AttachTextDocument(document);
         _lastObservedPageNumber = document?.CurrentPage ?? 1;
         _pendingPageIndex = null;
@@ -101,6 +104,7 @@ public partial class PdfDocumentView : UserControl
         HidePageIndicator();
         CloseTableOfContentsImmediately();
         ClosePageJump();
+        CloseHighlightPalette();
         ResetZoomController();
         base.OnDetachedFromVisualTree(e);
     }
@@ -277,6 +281,7 @@ public partial class PdfDocumentView : UserControl
         }
 
         CloseTableOfContentsImmediately();
+        CloseHighlightPalette();
         PageJumpTextBox.Text = document.CurrentPage.ToString();
         PageJumpError.IsVisible = false;
         PageJumpOverlay.IsVisible = true;
@@ -349,6 +354,7 @@ public partial class PdfDocumentView : UserControl
         if (TableOfContentsButton.IsChecked == true)
         {
             ClosePageJump();
+            CloseHighlightPalette();
             TableOfContentsOverlay.IsVisible = true;
             TableOfContentsOverlay.Classes.Add("open");
             return;

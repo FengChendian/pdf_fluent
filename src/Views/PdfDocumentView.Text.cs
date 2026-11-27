@@ -64,12 +64,14 @@ public partial class PdfDocumentView
         {
             _textDocument.SearchResultNavigationRequested -= NavigateToSearchResult;
             _textDocument.PageLinksLoaded -= OnPageLinksLoaded;
+            _textDocument.PropertyChanged -= OnHighlightDocumentChanged;
         }
         _textDocument = document;
         if (_textDocument is not null)
         {
             _textDocument.SearchResultNavigationRequested += NavigateToSearchResult;
             _textDocument.PageLinksLoaded += OnPageLinksLoaded;
+            _textDocument.PropertyChanged += OnHighlightDocumentChanged;
         }
     }
 
@@ -398,6 +400,7 @@ public partial class PdfDocumentView
 
     private async void OnTextKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Handled) return;
         if (DataContext is not DocumentTabViewModel document) return;
         if (e.Key == Key.Delete && document.SelectedHighlight is { } highlight && !IsTextBoxInput(e.Source))
         {

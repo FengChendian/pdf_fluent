@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:pdf_fluent.ViewModels"
+             xmlns:models="using:pdf_fluent.Models"
              xmlns:controls="using:pdf_fluent.Controls"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="pdf_fluent.Views.PdfDocumentView"
@@ -138,6 +139,14 @@
             <Setter Property="Opacity" Value="1" />
             <Setter Property="Margin" Value="0,40,16,0" />
         </Style>
+        <Style Selector="Grid.highlight-flyout">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="Margin" Value="0,32,0,0" />
+        </Style>
+        <Style Selector="Grid.highlight-flyout.open">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Margin" Value="0,40,0,0" />
+        </Style>
         <Style Selector="ToggleButton.toc-expander">
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="24" />
@@ -186,6 +195,59 @@
         </Style>
         <Style Selector="Button.toc-item:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#F0F3F9" />
+        </Style>
+        <Style Selector="Button.highlight-swatch">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.highlight-swatch:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F0F2F8" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.selected">
+            <Setter Property="BorderBrush" Value="#8B7ED8" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="#8B7ED8" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.custom-swatch">
+            <Setter Property="Width" Value="64" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="#F7F8FB" />
+            <Setter Property="BorderBrush" Value="#DDE2EC" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.custom-swatch /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="BorderBrush" Value="#DDE2EC" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.custom-swatch.selected">
+            <Setter Property="BorderBrush" Value="#8B7ED8" />
+        </Style>
+        <Style Selector="Button.highlight-swatch.custom-swatch.selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="#8B7ED8" />
+        </Style>
+        <Style Selector="NumericUpDown.color-channel">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="BorderBrush" Value="#DDE2EC" />
+            <Setter Property="ShowButtonSpinner" Value="False" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="255" />
+            <Setter Property="FormatString" Value="0" />
+            <Setter Property="AllowSpin" Value="True" />
         </Style>
     </UserControl.Styles>
 
@@ -240,9 +302,16 @@
                                     Foreground="{Binding $parent[Button].Foreground}" />
                         </Button>
                         <ToggleButton x:Name="HighlightButton" Classes="tool-button" Width="33"
-                                      IsChecked="{Binding IsHighlightMode}" ToolTip.Tip="高亮文本：拖动选择，单击选择单词">
-                            <i:Icon Value="fa-solid fa-highlighter" FontSize="14"
+                                      IsChecked="{Binding IsHighlightMode, Mode=OneWay}" Click="OnHighlightButtonClick"
+                                      ToolTip.Tip="高亮颜色 · 拖动选择或单击单词；Esc 退出">
+                            <Grid Width="20" Height="24">
+                                <i:Icon x:Name="HighlightToolIcon" Value="fa-solid fa-highlighter" FontSize="14"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                     Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                                <Border x:Name="HighlightColorIndicator" Width="14" Height="2" CornerRadius="1"
+                                        HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                        Background="{Binding HighlightColor}" />
+                            </Grid>
                         </ToggleButton>
                         <Button x:Name="AnnotationButton" Classes="tool-button" IsEnabled="False" ToolTip.Tip="画笔批注（即将推出）">
                             <i:Icon Value="fa-solid fa-pen" FontSize="14"
@@ -364,6 +433,139 @@
                             CornerRadius="9" Background="#6C5CE7" Foreground="#FFFFFF" />
                 </StackPanel>
             </Border>
+        </Grid>
+
+        <Grid x:Name="HighlightPaletteOverlay" Classes="highlight-flyout" Grid.RowSpan="2" Width="292"
+              HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="False">
+            <Grid.RenderTransform>
+                <TranslateTransform />
+            </Grid.RenderTransform>
+            <Border x:Name="HighlightPalettePanel" Margin="0,8,0,0"
+                    Background="White" BorderBrush="#DDE2EC" BorderThickness="1"
+                    CornerRadius="12" BoxShadow="0 8 26 0 #1F26334A" />
+            <Path x:Name="HighlightPalettePointerFill"
+                  Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8 L 20,12 L 0,12 Z"
+                  Width="20" Height="12" HorizontalAlignment="Left" VerticalAlignment="Top"
+                  Fill="White" IsHitTestVisible="False" />
+            <Path x:Name="HighlightPalettePointer"
+                  Data="M 0,8 C 4,8 4,0 10,0 C 16,0 16,8 20,8"
+                  Width="20" Height="12" HorizontalAlignment="Left" VerticalAlignment="Top"
+                  Stroke="#DDE2EC" StrokeThickness="1" IsHitTestVisible="False" />
+            <StackPanel Margin="16,23,16,15" Spacing="12">
+                <StackPanel x:Name="HighlightSwatches" Orientation="Horizontal" Spacing="7">
+                    <Button x:Name="HighlightRedSwatch" Classes="highlight-swatch" Tag="{x:Static models:HighlightPalette.Red}"
+                            Click="OnHighlightSwatchClick" ToolTip.Tip="柔玫红" AutomationProperties.Name="柔玫红">
+                        <Border CornerRadius="12">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Static models:HighlightPalette.Red}" />
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                    <Button x:Name="HighlightOrangeSwatch" Classes="highlight-swatch" Tag="{x:Static models:HighlightPalette.Orange}"
+                            Click="OnHighlightSwatchClick" ToolTip.Tip="杏橙" AutomationProperties.Name="杏橙">
+                        <Border CornerRadius="12">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Static models:HighlightPalette.Orange}" />
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                    <Button x:Name="HighlightYellowSwatch" Classes="highlight-swatch" Tag="{x:Static models:HighlightPalette.Yellow}"
+                            Click="OnHighlightSwatchClick" ToolTip.Tip="暖黄" AutomationProperties.Name="暖黄">
+                        <Border CornerRadius="12">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Static models:HighlightPalette.Yellow}" />
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                    <Button x:Name="HighlightGreenSwatch" Classes="highlight-swatch" Tag="{x:Static models:HighlightPalette.Green}"
+                            Click="OnHighlightSwatchClick" ToolTip.Tip="鼠尾草绿" AutomationProperties.Name="鼠尾草绿">
+                        <Border CornerRadius="12">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Static models:HighlightPalette.Green}" />
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                    <Button x:Name="HighlightBlueSwatch" Classes="highlight-swatch" Tag="{x:Static models:HighlightPalette.Blue}"
+                            Click="OnHighlightSwatchClick" ToolTip.Tip="雾蓝" AutomationProperties.Name="雾蓝">
+                        <Border CornerRadius="12">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Static models:HighlightPalette.Blue}" />
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                    <Button x:Name="HighlightCustomSwatch" Classes="highlight-swatch custom-swatch"
+                            Click="OnHighlightCustomClick" ToolTip.Tip="自定义颜色" AutomationProperties.Name="自定义颜色">
+                        <Grid ColumnDefinitions="22,*,22" Background="Transparent">
+                            <Border Width="20" Height="20" CornerRadius="10" Background="White"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border x:Name="HighlightCustomSwatchPreview" CornerRadius="10" />
+                            </Border>
+                            <Border Grid.Column="1" Width="1" Height="14" Background="#DDE2EC"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="HighlightCustomSwatchRainbow" Grid.Column="2"
+                                    Width="20" Height="20" CornerRadius="10"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border.Background>
+                                    <ConicGradientBrush Center="50%,50%">
+                                        <GradientStop Color="#FFFF0000" Offset="0" />
+                                        <GradientStop Color="#FFFFFF00" Offset="0.166667" />
+                                        <GradientStop Color="#FF00FF00" Offset="0.333333" />
+                                        <GradientStop Color="#FF00FFFF" Offset="0.5" />
+                                        <GradientStop Color="#FF0000FF" Offset="0.666667" />
+                                        <GradientStop Color="#FFFF00FF" Offset="0.833333" />
+                                        <GradientStop Color="#FFFF0000" Offset="1" />
+                                    </ConicGradientBrush>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </Button>
+                </StackPanel>
+                <StackPanel x:Name="HighlightCustomPanel" Spacing="12" IsVisible="False">
+                    <Border Height="1" Background="#ECECF2" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="自定义颜色" FontSize="12" FontWeight="SemiBold" Foreground="#424758" />
+                        <Button x:Name="HighlightCustomCollapseButton" Grid.Column="1" Classes="tool-button" Width="20" Height="20"
+                                Click="OnHighlightCustomCloseClick" ToolTip.Tip="收起自定义颜色" AutomationProperties.Name="收起自定义颜色">
+                            <i:Icon Value="fa-solid fa-chevron-up" FontSize="10" />
+                        </Button>
+                    </Grid>
+                    <controls:HighlightColorSpectrum x:Name="HighlightSpectrum" Height="146"
+                        AutomationProperties.Name="颜色色域，方向键调整饱和度和明度，PageUp 和 PageDown 调整色相" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="R" FontSize="10" Foreground="#858B9A" />
+                            <NumericUpDown x:Name="HighlightRedInput" Classes="color-channel"
+                                           ValueChanged="OnHighlightRgbChanged" AutomationProperties.Name="红色通道" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="G" FontSize="10" Foreground="#858B9A" />
+                            <NumericUpDown x:Name="HighlightGreenInput" Classes="color-channel"
+                                           ValueChanged="OnHighlightRgbChanged" AutomationProperties.Name="绿色通道" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Text="B" FontSize="10" Foreground="#858B9A" />
+                            <NumericUpDown x:Name="HighlightBlueInput" Classes="color-channel"
+                                           ValueChanged="OnHighlightRgbChanged" AutomationProperties.Name="蓝色通道" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*,32" ColumnSpacing="8">
+                        <TextBlock Text="ARGB" FontSize="10" Foreground="#858B9A" VerticalAlignment="Center" />
+                        <TextBox x:Name="HighlightArgbInput" Grid.Column="1" Classes="page-jump-input"
+                                 Height="32" MinHeight="0" Padding="8,5" CornerRadius="7" FontSize="12"
+                                 VerticalContentAlignment="Center"
+                                 BorderBrush="#DDE2EC" Background="White" MaxLength="9"
+                                 TextChanged="OnHighlightArgbChanged" AutomationProperties.Name="ARGB 颜色值"
+                                 PlaceholderText="#AARRGGBB" />
+                        <Border Grid.Column="2" CornerRadius="7" BorderBrush="#DDE2EC" BorderThickness="1" Background="#F2F3F7">
+                            <Border x:Name="HighlightCustomPreview" CornerRadius="6">
+                                <TextBlock Text="Aa" FontSize="11" Foreground="#424758" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Border>
+                    </Grid>
+                    <TextBlock x:Name="HighlightArgbError" Text="请输入 8 位 ARGB，例如 #60FFEB3B"
+                               FontSize="10" Foreground="#B45D68" IsVisible="False" />
+                </StackPanel>
+            </StackPanel>
         </Grid>
 
         <Grid x:Name="PageJumpOverlay" Classes="page-jump-flyout" Grid.RowSpan="2" Width="{Binding #PageNavigation.Bounds.Width}"

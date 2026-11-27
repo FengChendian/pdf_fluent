@@ -18,6 +18,11 @@ public sealed partial class DocumentTabViewModel
     public ObservableCollection<PdfHighlight> Highlights { get; } = [];
 
     [ObservableProperty]
+    private Color _highlightColor = HighlightPalette.Yellow;
+
+    public Color? CustomHighlightColor { get; set; }
+
+    [ObservableProperty]
     private string? _highlightErrorMessage;
 
     [ObservableProperty]
@@ -35,6 +40,8 @@ public sealed partial class DocumentTabViewModel
     {
         PdfTextRange range = selection.Normalize();
         if (range.IsEmpty) return;
+        // A multi-page selection uses the color chosen when the gesture finished.
+        Color color = HighlightColor;
 
         bool added = false;
         for (int pageIndex = range.Start.PageIndex; pageIndex <= range.End.PageIndex; pageIndex++)
@@ -48,7 +55,7 @@ public sealed partial class DocumentTabViewModel
             Highlights.Add(new PdfHighlight(
                 pageIndex,
                 rects,
-                Color.FromArgb(96, 255, 235, 59)));
+                color));
             UpdateHighlightModifiedState(pageIndex);
             added = true;
         }
