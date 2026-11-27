@@ -17,6 +17,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     private readonly PDFiumService _pdfService;
     private readonly RecentDocumentsService _recentService;
     private readonly FavoriteDocumentsService _favoriteService;
+    private readonly HighlightPaletteSettings _highlightPaletteSettings = new();
     private readonly DispatcherTimer _statusMessageTimer;
     private bool _disposed;
 
@@ -234,7 +235,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         StatusMessage = null;
         RecentDocumentViewModel? recent = RecentDocuments.FirstOrDefault(d =>
             string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-        var document = new DocumentTabViewModel(filePath, _pdfService, recent?.ScrollOffset)
+        var document = new DocumentTabViewModel(filePath, _pdfService, recent?.ScrollOffset, _highlightPaletteSettings)
         {
             IsFavorite = FavoriteDocuments.Any(d =>
                 string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase)),

@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using pdf_fluent.Controls;
 using pdf_fluent.Models;
+using pdf_fluent.Services;
 using pdf_fluent.ViewModels;
 using pdf_fluent.Views;
 using Xunit;
@@ -20,6 +21,40 @@ namespace pdf_fluent.Tests;
 
 public sealed class PdfHighlightPaletteTests
 {
+    [AvaloniaTheory]
+    [InlineData("#FFFF9EA9")]
+    [InlineData("#FFFFBE81")]
+    [InlineData("#FFFFEB3B")]
+    [InlineData("#FFB3FFCD")]
+    [InlineData("#FF9FC5FF")]
+    [InlineData("#FF000000")]
+    [InlineData("#FFFFFFFF")]
+    [InlineData("#FF777777")]
+    [InlineData("#FF0000FF")]
+    [InlineData("#408764AE")]
+    [InlineData("#00000000")]
+    public async Task SelectedPenUsesTheHighlightColorDuringHoverAndPress(string hex)
+    {
+        using var reader = await Reader.Create();
+        reader.Document.HighlightColor = Color.Parse(hex);
+        Click(reader.Window, reader.View.HighlightButton);
+        reader.Window.UpdateLayout();
+        AssertSelectedPenColors(reader);
+        reader.Window.MouseMove(new Point(20, 400));
+        AssertSelectedPenColors(reader);
+        reader.Window.MouseMove(Center(reader.View.HighlightButton, reader.Window));
+        AssertSelectedPenColors(reader);
+        reader.Window.MouseDown(Center(reader.View.HighlightButton, reader.Window), MouseButton.Left);
+        AssertSelectedPenColors(reader);
+        reader.Window.MouseUp(Center(reader.View.HighlightButton, reader.Window), MouseButton.Left);
+        reader.Window.MouseMove(new Point(20, 400));
+        Assert.False(reader.Document.IsHighlightMode);
+        var surface = Named<ContentPresenter>(reader.View.HighlightButton, "PART_ContentPresenter");
+        Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color);
+        Assert.Equal(Color.Parse("#666D80"), Assert.IsAssignableFrom<ISolidColorBrush>(
+            Named<Optris.Icons.Avalonia.Icon>(reader.View, "HighlightToolIcon").Foreground).Color);
+    }
+
     [AvaloniaTheory]
     [InlineData(900)]
     [InlineData(1200)]
@@ -233,7 +268,7 @@ public sealed class PdfHighlightPaletteTests
     }
 
     [AvaloniaFact]
-    public async Task SwitchingDocumentsRestoresEachDocumentsCustomSwatchColor()
+    public async Task SwitchingDocumentsSharesTheCustomSwatchAndSelectedColor()
     {
         using var reader = await Reader.Create();
         var view = reader.View;
@@ -246,23 +281,88 @@ public sealed class PdfHighlightPaletteTests
         Click(reader.Window, Named<Button>(view, "HighlightRedSwatch"));
 
         using var service = new FakePdfDocumentService(1);
-        using var other = new DocumentTabViewModel("other.pdf", service);
+        using var other = new DocumentTabViewModel("other.pdf", service, highlightPaletteSettings: reader.PaletteSettings);
         await other.LoadAsync();
         view.DataContext = other;
         Click(reader.Window, view.HighlightButton);
         reader.Window.UpdateLayout();
         var preview = Named<Border>(view, "HighlightCustomSwatchPreview");
-        Assert.Equal(HighlightPalette.Yellow, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Assert.Equal(HighlightPalette.Red, other.HighlightColor);
+        AssertSelectedPenColors(reader);
         Click(reader.Window, Named<Button>(view, "HighlightBlueSwatch"));
-        Assert.Equal(HighlightPalette.Yellow, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
 
         view.DataContext = reader.Document;
         Click(reader.Window, view.HighlightButton);
         reader.Window.UpdateLayout();
-        Assert.Equal(HighlightPalette.Red, reader.Document.HighlightColor);
+        Assert.Equal(HighlightPalette.Blue, reader.Document.HighlightColor);
+        AssertSelectedPenColors(reader);
         Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
         Click(reader.Window, Named<Button>(view, "HighlightCustomSwatch"));
         Assert.Equal(custom, reader.Document.HighlightColor);
+    }
+
+    [AvaloniaFact]
+    public async Task OpenReadersSynchronizeCustomInputsAndSelectionImmediately()
+    {
+        var settings = new HighlightPaletteSettings(null);
+        using var first = await Reader.Create(paletteSettings: settings);
+        using var second = await Reader.Create(paletteSettings: settings);
+        Click(first.Window, first.View.HighlightButton);
+        Click(second.Window, second.View.HighlightButton);
+        first.Window.UpdateLayout();
+        second.Window.UpdateLayout();
+        Click(first.Window, Named<Button>(first.View, "HighlightCustomSwatch"));
+        Named<TextBox>(first.View, "HighlightArgbInput").Text = "#408764AE";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("#408764AE", Named<TextBox>(second.View, "HighlightArgbInput").Text);
+        Assert.Equal(Color.Parse("#408764AE"), second.Document.CustomHighlightColor);
+        Assert.Equal(Color.Parse("#408764AE"), Assert.IsAssignableFrom<ISolidColorBrush>(
+            Named<Border>(second.View, "HighlightCustomSwatchPreview").Background).Color);
+        Assert.Contains("selected", Named<Button>(second.View, "HighlightCustomSwatch").Classes);
+        AssertSelectedPenColors(first);
+        AssertSelectedPenColors(second);
+
+        Click(second.Window, Named<Button>(second.View, "HighlightBlueSwatch"));
+        Assert.Contains("selected", Named<Button>(first.View, "HighlightBlueSwatch").Classes);
+        Assert.Equal(Color.Parse("#408764AE"), first.Document.CustomHighlightColor);
+        AssertSelectedPenColors(first);
+        AssertSelectedPenColors(second);
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingAndReopeningReadersRestoresPersistedCustomColorAndSelection()
+    {
+        string directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"pdf-palette-{Guid.NewGuid():N}");
+        string path = System.IO.Path.Combine(directory, "palette.json");
+        try
+        {
+            using (var reader = await Reader.Create(paletteSettings: new HighlightPaletteSettings(path)))
+            {
+                Click(reader.Window, reader.View.HighlightButton);
+                reader.Window.UpdateLayout();
+                Click(reader.Window, Named<Button>(reader.View, "HighlightCustomSwatch"));
+                Named<TextBox>(reader.View, "HighlightArgbInput").Text = "#408764AE";
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // A fresh settings instance simulates restarting the application.
+            using var reopened = await Reader.Create(paletteSettings: new HighlightPaletteSettings(path));
+            Click(reopened.Window, reopened.View.HighlightButton);
+            reopened.Window.UpdateLayout();
+            Assert.Equal(Color.Parse("#408764AE"), reopened.Document.HighlightColor);
+            Assert.Equal("#408764AE", Named<TextBox>(reopened.View, "HighlightArgbInput").Text);
+            Assert.Equal(Color.Parse("#408764AE"), Assert.IsAssignableFrom<ISolidColorBrush>(
+                Named<Border>(reopened.View, "HighlightCustomSwatchPreview").Background).Color);
+            Assert.Contains("selected", Named<Button>(reopened.View, "HighlightCustomSwatch").Classes);
+            AssertSelectedPenColors(reopened);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
     }
 
     [AvaloniaFact]
@@ -286,6 +386,7 @@ public sealed class PdfHighlightPaletteTests
             Assert.Contains("selected", swatch.Classes);
             Color preset = Assert.IsType<Color>(swatch.Tag);
             Assert.Equal(preset, reader.Document.HighlightColor);
+            AssertSelectedPenColors(reader);
             Assert.Equal(HighlightPalette.Alpha, reader.Document.HighlightColor.A);
             var surface = Named<ContentPresenter>(swatch, "PART_ContentPresenter");
             Assert.Equal(new CornerRadius(8), surface.CornerRadius);
@@ -410,6 +511,22 @@ public sealed class PdfHighlightPaletteTests
         Assert.Equal(HighlightPalette.Yellow, other.HighlightColor);
     }
 
+    private static void AssertSelectedPenColors(Reader reader)
+    {
+        var document = Assert.IsType<DocumentTabViewModel>(reader.View.DataContext);
+        Assert.Equal(document.HighlightColor,
+            Assert.IsAssignableFrom<ISolidColorBrush>(reader.View.HighlightButton.Background).Color);
+        var surface = Named<ContentPresenter>(reader.View.HighlightButton, "PART_ContentPresenter");
+        Color background = Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color;
+        var icon = Named<Optris.Icons.Avalonia.Icon>(reader.View, "HighlightToolIcon");
+        Color foreground = Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color;
+        Assert.Equal(document.HighlightColor, background);
+        Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(document.HighlightButtonForeground).Color, foreground);
+        Assert.Equal(foreground, Assert.IsAssignableFrom<ISolidColorBrush>(surface.Foreground).Color);
+        Assert.InRange(HighlightButtonColorsTests.ContrastOnWhite(foreground, background), 4.5, 21);
+        Assert.Equal(new CornerRadius(8), surface.CornerRadius);
+    }
+
     private static void AssertToolbarIconAlignment(PdfDocumentView view)
     {
         var penIcon = Named<Control>(view, "HighlightToolIcon");
@@ -428,15 +545,17 @@ public sealed class PdfHighlightPaletteTests
         public DocumentTabViewModel Document { get; }
         public PdfDocumentView View { get; }
         public Window Window { get; }
-        private Reader(int width)
+        public HighlightPaletteSettings PaletteSettings { get; }
+        private Reader(int width, HighlightPaletteSettings? paletteSettings)
         {
-            Document = new DocumentTabViewModel("unused.pdf", _service);
+            PaletteSettings = paletteSettings ?? new HighlightPaletteSettings(null);
+            Document = new DocumentTabViewModel("unused.pdf", _service, highlightPaletteSettings: PaletteSettings);
             View = new PdfDocumentView { DataContext = Document };
             Window = new Window { Width = width, Height = 900, Content = View };
         }
-        public static async Task<Reader> Create(int width = 1200)
+        public static async Task<Reader> Create(int width = 1200, HighlightPaletteSettings? paletteSettings = null)
         {
-            var reader = new Reader(width);
+            var reader = new Reader(width, paletteSettings);
             await reader.Document.LoadAsync();
             reader.Window.Show();
             reader.Window.UpdateLayout();

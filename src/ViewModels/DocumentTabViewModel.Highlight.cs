@@ -17,10 +17,28 @@ public sealed partial class DocumentTabViewModel
 
     public ObservableCollection<PdfHighlight> Highlights { get; } = [];
 
-    [ObservableProperty]
-    private Color _highlightColor = HighlightPalette.Yellow;
+    public Color HighlightColor
+    {
+        get => _highlightPaletteSettings.HighlightColor;
+        set => SelectHighlightColor(value, custom: false);
+    }
 
-    public Color CustomHighlightColor { get; set; } = HighlightPalette.Yellow;
+    public Color CustomHighlightColor => _highlightPaletteSettings.CustomHighlightColor;
+    public bool IsCustomHighlightColor => _highlightPaletteSettings.IsCustomHighlightColor;
+    public IBrush HighlightButtonBackground => new SolidColorBrush(HighlightColor);
+    public IBrush HighlightButtonForeground => new SolidColorBrush(HighlightButtonColors.ForegroundFor(HighlightColor));
+
+    internal void SelectHighlightColor(Color color, bool custom) =>
+        _highlightPaletteSettings.SelectColor(color, custom);
+
+    private void OnHighlightPaletteSettingsChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(HighlightColor));
+        OnPropertyChanged(nameof(HighlightButtonBackground));
+        OnPropertyChanged(nameof(HighlightButtonForeground));
+        OnPropertyChanged(nameof(CustomHighlightColor));
+        OnPropertyChanged(nameof(IsCustomHighlightColor));
+    }
 
     [ObservableProperty]
     private string? _highlightErrorMessage;

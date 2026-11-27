@@ -85,7 +85,6 @@ public partial class PdfDocumentView : UserControl
         CloseTableOfContentsImmediately();
         ClosePageJump();
         CloseHighlightPalette();
-        _usingCustomHighlightColor = false;
         AttachTextDocument(document);
         _lastObservedPageNumber = document?.CurrentPage ?? 1;
         _pendingPageIndex = null;

@@ -50,6 +50,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     private const long MaxBitmapCacheBytes = 256 * 1024 * 1024;
     private const int MaxQueuedRenderRequests = 32;
     private readonly IPdfDocumentService _pdfService;
+    private readonly HighlightPaletteSettings _highlightPaletteSettings;
     private readonly HashSet<PdfPageViewModel> _realizedPages = new();
     private readonly HashSet<PdfPageViewModel> _visiblePages = new();
     private readonly LinkedList<RenderRequest> _visibleRenderQueue = new();
@@ -83,10 +84,13 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     public DocumentTabViewModel(
         string filePath,
         IPdfDocumentService pdfService,
-        Avalonia.Vector? scrollOffset = null)
+        Avalonia.Vector? scrollOffset = null,
+        HighlightPaletteSettings? highlightPaletteSettings = null)
     {
         FilePath = filePath;
         _pdfService = pdfService;
+        _highlightPaletteSettings = highlightPaletteSettings ?? new HighlightPaletteSettings(null);
+        _highlightPaletteSettings.Changed += OnHighlightPaletteSettingsChanged;
         UpdateScrollOffset(scrollOffset ?? default);
         _ = RenderWorkerAsync();
     }
@@ -702,6 +706,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _highlightPaletteSettings.Changed -= OnHighlightPaletteSettingsChanged;
         _searchCancellation?.Cancel();
         ClearPages();
         _workerCancellation.Cancel();

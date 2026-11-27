@@ -14,7 +14,6 @@ namespace pdf_fluent.Views;
 public partial class PdfDocumentView
 {
     private bool _syncingHighlightPalette;
-    private bool _usingCustomHighlightColor;
 
     private IEnumerable<Button> PresetHighlightSwatches =>
         HighlightSwatches.Children.OfType<Button>().Where(button => button.Tag is Color);
@@ -30,7 +29,9 @@ public partial class PdfDocumentView
 
     private void OnHighlightDocumentChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DocumentTabViewModel.HighlightColor)) SyncHighlightPalette();
+        if (e.PropertyName is nameof(DocumentTabViewModel.HighlightColor) or
+            nameof(DocumentTabViewModel.CustomHighlightColor) or nameof(DocumentTabViewModel.IsCustomHighlightColor))
+            SyncHighlightPalette();
         if (e.PropertyName == nameof(DocumentTabViewModel.IsHighlightMode) &&
             DataContext is DocumentTabViewModel { IsHighlightMode: false }) CloseHighlightPalette();
     }
@@ -93,7 +94,6 @@ public partial class PdfDocumentView
     private void OnHighlightSwatchClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DocumentTabViewModel document || sender is not Button { Tag: Color preset }) return;
-        _usingCustomHighlightColor = false;
         HighlightCustomPanel.IsVisible = false;
         document.HighlightColor = preset;
         SyncHighlightPalette();
@@ -102,8 +102,7 @@ public partial class PdfDocumentView
     private void OnHighlightCustomClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DocumentTabViewModel document) return;
-        _usingCustomHighlightColor = true;
-        document.HighlightColor = document.CustomHighlightColor;
+        document.SelectHighlightColor(document.CustomHighlightColor, custom: true);
         HighlightCustomPanel.IsVisible = true;
         SyncHighlightPalette();
     }
@@ -120,7 +119,6 @@ public partial class PdfDocumentView
         if (_syncingHighlightPalette || DataContext is not DocumentTabViewModel document ||
             HighlightRedInput.Value is not { } red || HighlightGreenInput.Value is not { } green ||
             HighlightBlueInput.Value is not { } blue) return;
-        _usingCustomHighlightColor = true;
         SetHighlightColor(Color.FromArgb(document.HighlightColor.A, (byte)red, (byte)green, (byte)blue));
     }
 
@@ -136,7 +134,6 @@ public partial class PdfDocumentView
         bool valid = hex.Length == 8 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _);
         HighlightArgbError.IsVisible = !valid;
         if (!valid) return;
-        _usingCustomHighlightColor = true;
         SetHighlightColor(Color.FromUInt32(uint.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture)), preserveHex: true);
     }
 
@@ -147,8 +144,7 @@ public partial class PdfDocumentView
         _syncingHighlightPalette = true;
         try
         {
-            document.HighlightColor = color;
-            if (_usingCustomHighlightColor) document.CustomHighlightColor = color;
+            document.SelectHighlightColor(color, custom: true);
         }
         finally { _syncingHighlightPalette = false; }
         SyncHighlightPalette(preserveHex);
@@ -165,7 +161,7 @@ public partial class PdfDocumentView
             foreach (Button swatch in PresetHighlightSwatches)
             {
                 Color preset = (Color)swatch.Tag!;
-                bool selected = !_usingCustomHighlightColor && preset == color;
+                bool selected = !document.IsCustomHighlightColor && preset == color;
                 swatch.Classes.Set("selected", selected);
                 presetSelected |= selected;
             }

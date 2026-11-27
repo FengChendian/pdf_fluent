@@ -75,6 +75,22 @@
         <Style Selector="ToggleButton.tool-button:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#E8E3FF" />
         </Style>
+        <Style Selector="ToggleButton.highlight-button:checked">
+            <Setter Property="Background" Value="{Binding HighlightButtonBackground}" />
+            <Setter Property="Foreground" Value="{Binding HighlightButtonForeground}" />
+        </Style>
+        <Style Selector="ToggleButton.highlight-button:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding $parent[ToggleButton].Background}" />
+            <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
+        <Style Selector="ToggleButton.highlight-button:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding $parent[ToggleButton].Background}" />
+            <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
+        <Style Selector="ToggleButton.highlight-button:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding $parent[ToggleButton].Background}" />
+            <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
         <Style Selector="ToggleButton.page-jump-button">
             <Setter Property="Height" Value="34" />
             <Setter Property="Padding" Value="0" />
@@ -301,7 +317,7 @@
                             <i:Icon Value="fa-solid fa-magnifying-glass" FontSize="14"
                                     Foreground="{Binding $parent[Button].Foreground}" />
                         </Button>
-                        <ToggleButton x:Name="HighlightButton" Classes="tool-button" Width="33"
+                        <ToggleButton x:Name="HighlightButton" Classes="tool-button highlight-button" Width="33"
                                       IsChecked="{Binding IsHighlightMode, Mode=OneWay}" Click="OnHighlightButtonClick"
                                       ToolTip.Tip="高亮颜色 · 拖动选择或单击单词；Esc 退出">
                             <Grid Width="20" Height="24">
