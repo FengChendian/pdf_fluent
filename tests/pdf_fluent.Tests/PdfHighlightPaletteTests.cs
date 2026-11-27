@@ -187,11 +187,82 @@ public sealed class PdfHighlightPaletteTests
         Click(window, Named<Button>(view, "HighlightCustomCollapseButton"));
         Assert.False(panel.IsVisible);
         Click(window, Named<Button>(view, "HighlightBlueSwatch"));
-        Assert.Equal(HighlightPalette.Blue, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
         Assert.Equal(Color.Parse("#DDE2EC"), Assert.IsAssignableFrom<ISolidColorBrush>(surface.BorderBrush).Color);
         Click(window, target);
         Assert.True(panel.IsVisible);
         Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PresetsAndPaletteReopeningPreserveTheCustomSwatchColor(bool editCustomColor)
+    {
+        using var reader = await Reader.Create();
+        var view = reader.View;
+        var window = reader.Window;
+        Click(window, view.HighlightButton);
+        window.UpdateLayout();
+        var preview = Named<Border>(view, "HighlightCustomSwatchPreview");
+        Color custom = HighlightPalette.Yellow;
+        if (editCustomColor)
+        {
+            Click(window, Named<Button>(view, "HighlightCustomSwatch"));
+            Named<TextBox>(view, "HighlightArgbInput").Text = "#408764AE";
+            Dispatcher.UIThread.RunJobs();
+            custom = Color.Parse("#408764AE");
+        }
+
+        foreach (string name in new[] { "Red", "Orange", "Yellow", "Green", "Blue" })
+        {
+            var preset = Named<Button>(view, $"Highlight{name}Swatch");
+            Click(window, preset);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Assert.IsType<Color>(preset.Tag), reader.Document.HighlightColor);
+            Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+            Click(window, view.HighlightButton);
+            Click(window, view.HighlightButton);
+            window.UpdateLayout();
+            Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        }
+
+        Click(window, Named<Button>(view, "HighlightCustomSwatch"));
+        Assert.Equal(custom, reader.Document.HighlightColor);
+        Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(Named<Border>(view, "HighlightCustomPreview").Background).Color);
+    }
+
+    [AvaloniaFact]
+    public async Task SwitchingDocumentsRestoresEachDocumentsCustomSwatchColor()
+    {
+        using var reader = await Reader.Create();
+        var view = reader.View;
+        Click(reader.Window, view.HighlightButton);
+        reader.Window.UpdateLayout();
+        Click(reader.Window, Named<Button>(view, "HighlightCustomSwatch"));
+        Named<TextBox>(view, "HighlightArgbInput").Text = "#408764AE";
+        Dispatcher.UIThread.RunJobs();
+        Color custom = reader.Document.HighlightColor;
+        Click(reader.Window, Named<Button>(view, "HighlightRedSwatch"));
+
+        using var service = new FakePdfDocumentService(1);
+        using var other = new DocumentTabViewModel("other.pdf", service);
+        await other.LoadAsync();
+        view.DataContext = other;
+        Click(reader.Window, view.HighlightButton);
+        reader.Window.UpdateLayout();
+        var preview = Named<Border>(view, "HighlightCustomSwatchPreview");
+        Assert.Equal(HighlightPalette.Yellow, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Click(reader.Window, Named<Button>(view, "HighlightBlueSwatch"));
+        Assert.Equal(HighlightPalette.Yellow, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+
+        view.DataContext = reader.Document;
+        Click(reader.Window, view.HighlightButton);
+        reader.Window.UpdateLayout();
+        Assert.Equal(HighlightPalette.Red, reader.Document.HighlightColor);
+        Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(preview.Background).Color);
+        Click(reader.Window, Named<Button>(view, "HighlightCustomSwatch"));
+        Assert.Equal(custom, reader.Document.HighlightColor);
     }
 
     [AvaloniaFact]

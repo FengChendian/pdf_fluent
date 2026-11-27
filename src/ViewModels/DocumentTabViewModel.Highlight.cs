@@ -20,7 +20,7 @@ public sealed partial class DocumentTabViewModel
     [ObservableProperty]
     private Color _highlightColor = HighlightPalette.Yellow;
 
-    public Color? CustomHighlightColor { get; set; }
+    public Color CustomHighlightColor { get; set; } = HighlightPalette.Yellow;
 
     [ObservableProperty]
     private string? _highlightErrorMessage;

@@ -103,7 +103,7 @@ public partial class PdfDocumentView
     {
         if (DataContext is not DocumentTabViewModel document) return;
         _usingCustomHighlightColor = true;
-        document.HighlightColor = document.CustomHighlightColor ?? document.HighlightColor;
+        document.HighlightColor = document.CustomHighlightColor;
         HighlightCustomPanel.IsVisible = true;
         SyncHighlightPalette();
     }
@@ -177,7 +177,7 @@ public partial class PdfDocumentView
             if (!preserveHex) HighlightArgbInput.Text = $"#{color.ToUInt32():X8}";
             HighlightArgbError.IsVisible = false;
             HighlightCustomPreview.Background = new SolidColorBrush(color);
-            HighlightCustomSwatchPreview.Background = HighlightCustomPreview.Background;
+            HighlightCustomSwatchPreview.Background = new SolidColorBrush(document.CustomHighlightColor);
         }
         finally { _syncingHighlightPalette = false; }
     }
