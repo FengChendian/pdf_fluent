@@ -39,14 +39,13 @@ public partial class PdfDocumentView
     private void OnHighlightButtonClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DocumentTabViewModel document) return;
-        if (HighlightPaletteOverlay.IsVisible)
+        if (document.IsHighlightMode)
         {
             document.IsHighlightMode = false;
             CloseHighlightPalette();
             return;
         }
 
-        // Clicking an active pen after dismissing the palette opens its colors again.
         document.IsHighlightMode = true;
         HighlightButton.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
         ClosePageJump();

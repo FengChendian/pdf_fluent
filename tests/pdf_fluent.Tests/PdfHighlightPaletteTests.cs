@@ -381,6 +381,8 @@ public sealed class PdfHighlightPaletteTests
 
         view.DataContext = reader.Document;
         Click(reader.Window, view.HighlightButton);
+        Assert.False(reader.Document.IsHighlightMode);
+        Click(reader.Window, view.HighlightButton);
         reader.Window.UpdateLayout();
         Assert.Equal(HighlightPalette.Blue, reader.Document.HighlightColor);
         AssertSelectedPenColors(reader);
@@ -544,8 +546,10 @@ public sealed class PdfHighlightPaletteTests
         Assert.Equal(custom, Assert.IsAssignableFrom<ISolidColorBrush>(Named<Border>(view, "HighlightCustomPreview").Background).Color);
     }
 
-    [AvaloniaFact]
-    public async Task DismissReopenToggleAndEscapePreserveTheExpectedPenState()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClickingActivePenAfterDismissingPaletteDisablesHighlightMode(bool dismissWithEscape)
     {
         using var reader = await Reader.Create();
         var view = reader.View;
@@ -553,12 +557,28 @@ public sealed class PdfHighlightPaletteTests
         var overlay = Named<Grid>(view, "HighlightPaletteOverlay");
         Click(window, view.HighlightButton);
         window.UpdateLayout();
-        window.MouseDown(new Point(20, 400), MouseButton.Left);
-        window.MouseUp(new Point(20, 400), MouseButton.Left);
+        if (dismissWithEscape)
+        {
+            Click(window, Named<Button>(view, "HighlightCustomSwatch"));
+            window.UpdateLayout();
+            Named<TextBox>(view, "HighlightArgbInput").Focus();
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        }
+        else
+        {
+            window.MouseDown(new Point(20, 400), MouseButton.Left);
+            window.MouseUp(new Point(20, 400), MouseButton.Left);
+        }
         Assert.False(overlay.IsVisible);
         Assert.True(reader.Document.IsHighlightMode);
+        Assert.True(view.HighlightButton.IsChecked);
+        Click(window, view.HighlightButton);
+        Assert.False(overlay.IsVisible);
+        Assert.False(reader.Document.IsHighlightMode);
+        Assert.False(view.HighlightButton.IsChecked);
         Click(window, view.HighlightButton);
         Assert.True(overlay.IsVisible);
+        Assert.True(reader.Document.IsHighlightMode);
         Assert.True(view.HighlightButton.IsChecked);
         Click(window, view.HighlightButton);
         Assert.False(overlay.IsVisible);
@@ -587,6 +607,9 @@ public sealed class PdfHighlightPaletteTests
         Click(reader.Window, Named<TextBlock>(view, "PageIndicatorText"));
         Assert.False(Named<Grid>(view, "HighlightPaletteOverlay").IsVisible);
         Assert.True(view.IsPageJumpVisible);
+        Click(reader.Window, view.HighlightButton);
+        Assert.False(reader.Document.IsHighlightMode);
+        Assert.False(Named<Grid>(view, "HighlightPaletteOverlay").IsVisible);
         Click(reader.Window, view.HighlightButton);
         Assert.False(view.IsPageJumpVisible);
         using var service = new FakePdfDocumentService(1);
