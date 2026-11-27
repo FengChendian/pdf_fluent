@@ -22,6 +22,61 @@ namespace pdf_fluent.Tests;
 public sealed class PdfHighlightPaletteTests
 {
     [AvaloniaTheory]
+    [InlineData(900, 1)]
+    [InlineData(901, 1)]
+    [InlineData(1200, 1)]
+    [InlineData(1201, 1)]
+    [InlineData(900, 1.25)]
+    [InlineData(1201, 1.25)]
+    [InlineData(900, 1.5)]
+    [InlineData(1201, 2)]
+    public async Task ReaderFlyoutsHaveTheSameOneDipHeaderGapAndSurfaceStyle(int width, double scaling)
+    {
+        using var reader = await Reader.Create(width);
+        object impl = reader.Window.PlatformImpl!;
+        Type type = impl.GetType();
+        type.GetProperty("RenderScaling")!.SetValue(impl, scaling);
+        ((Action<double>?)type.GetProperty("ScalingChanged")!.GetValue(impl))?.Invoke(scaling);
+        reader.Window.UpdateLayout();
+        var view = reader.View;
+        Click(reader.Window, view.HighlightButton);
+        await Task.Delay(260);
+        reader.Window.UpdateLayout();
+        var palette = Named<Border>(view, "HighlightPalettePanel");
+        double headerBottom = Named<Border>(view, "ReaderHeader").Bounds.Bottom;
+        double paletteGap = palette.TranslatePoint(default, view)!.Value.Y - headerBottom;
+        var palettePointer = Named<Path>(view, "HighlightPalettePointer");
+        Assert.InRange(Math.Abs(Center(view.HighlightButton, view).X - Center(palettePointer, view).X),
+            0, 0.501 / scaling);
+
+        Click(reader.Window, Named<TextBlock>(view, "PageIndicatorText"));
+        await Task.Delay(260);
+        reader.Window.UpdateLayout();
+        var jump = Named<Border>(view, "PageJumpPanel");
+        double jumpGap = jump.TranslatePoint(default, view)!.Value.Y - headerBottom;
+        Assert.Equal(jumpGap, paletteGap, 6);
+        // Layout rounding can move the one-DIP gap by half a physical pixel.
+        Assert.InRange(Math.Abs(jumpGap - 1) * scaling, 0, 0.501);
+
+        Click(reader.Window, Named<Avalonia.Controls.Primitives.ToggleButton>(view, "TableOfContentsButton"));
+        await Task.Delay(260);
+        reader.Window.UpdateLayout();
+        var toc = Named<Border>(view, "TableOfContentsPanel");
+        Assert.Equal(jumpGap, toc.TranslatePoint(default, view)!.Value.Y - headerBottom, 6);
+        Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(jump.Background).Color,
+            Assert.IsAssignableFrom<ISolidColorBrush>(palette.Background).Color);
+        Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(jump.BorderBrush).Color,
+            Assert.IsAssignableFrom<ISolidColorBrush>(palette.BorderBrush).Color);
+        Assert.Equal(jump.BorderThickness, palette.BorderThickness);
+        Assert.Equal(jump.CornerRadius, palette.CornerRadius);
+        Assert.Equal(jump.BoxShadow, palette.BoxShadow);
+        var jumpPointer = Named<Path>(view, "PageJumpPointer");
+        Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(jumpPointer.Stroke).Color,
+            Assert.IsAssignableFrom<ISolidColorBrush>(palettePointer.Stroke).Color);
+        Assert.Equal(jumpPointer.StrokeThickness, palettePointer.StrokeThickness);
+    }
+
+    [AvaloniaTheory]
     [InlineData("#FFFF9EA9")]
     [InlineData("#FFFFBE81")]
     [InlineData("#FFFFEB3B")]
@@ -82,7 +137,7 @@ public sealed class PdfHighlightPaletteTests
         Assert.Equal(Color.Parse("#DDE2EC"), Assert.IsAssignableFrom<ISolidColorBrush>(panel.BorderBrush).Color);
         // Layout rounding can place an even-width pointer half a DIP off an odd-width pen.
         Assert.InRange(Math.Abs(Center(view.HighlightButton, view).X - Center(pointer, view).X), 0, 0.501);
-        Assert.Equal(Named<Border>(view, "ReaderHeader").Bounds.Bottom, panel.TranslatePoint(default, view)!.Value.Y, 1);
+        Assert.Equal(Named<Border>(view, "ReaderHeader").Bounds.Bottom + 1, panel.TranslatePoint(default, view)!.Value.Y, 1);
         Assert.Equal(viewport, Named<Grid>(view, "DocumentViewport").Bounds);
         AssertToolbarIconAlignment(view);
         Assert.Empty(overlay.GetVisualDescendants().OfType<Slider>());
@@ -109,18 +164,18 @@ public sealed class PdfHighlightPaletteTests
         var overlay = Named<Grid>(view, "HighlightPaletteOverlay");
         Rect viewport = Named<Grid>(view, "DocumentViewport").Bounds;
         Assert.Equal(0, overlay.Opacity);
-        Assert.Equal(32, overlay.Margin.Top);
+        Assert.Equal(33, overlay.Margin.Top);
         for (int attempt = 0; attempt < 2; attempt++)
         {
             Click(window, view.HighlightButton);
             window.UpdateLayout();
             Assert.True(overlay.IsVisible);
             Assert.True(overlay.Opacity < 1);
-            Assert.InRange(overlay.Margin.Top, 32, 39.99);
+            Assert.InRange(overlay.Margin.Top, 33, 40.99);
             await Task.Delay(260);
             window.UpdateLayout();
             Assert.Equal(1, overlay.Opacity);
-            Assert.Equal(40, overlay.Margin.Top);
+            Assert.Equal(41, overlay.Margin.Top);
             Assert.Equal(viewport, Named<Grid>(view, "DocumentViewport").Bounds);
             Assert.InRange(Math.Abs(Center(view.HighlightButton, view).X -
                                    Center(Named<Path>(view, "HighlightPalettePointer"), view).X), 0, 0.501);
@@ -130,7 +185,7 @@ public sealed class PdfHighlightPaletteTests
             await Task.Delay(260);
             window.UpdateLayout();
             Assert.Equal(0, overlay.Opacity);
-            Assert.Equal(32, overlay.Margin.Top);
+            Assert.Equal(33, overlay.Margin.Top);
         }
     }
 

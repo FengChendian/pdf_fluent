@@ -122,7 +122,7 @@ public sealed class PdfTableOfContentsTests
             window.UpdateLayout();
 
             Assert.Equal(1, flyout.Opacity);
-            Assert.Equal(new Thickness(0, 40, 0, 20), flyout.Margin);
+            Assert.Equal(new Thickness(0, 41, 0, 20), flyout.Margin);
             Assert.Equal(2, flyout.Transitions?.Count);
             Assert.Equal(
                 TimeSpan.FromMilliseconds(180),
@@ -137,7 +137,7 @@ public sealed class PdfTableOfContentsTests
             Path pointerFill = Named<Path>(view, "TableOfContentsPointerFill");
             Border panel = Named<Border>(view, "TableOfContentsPanel");
             Assert.Equal(Avalonia.Layout.VerticalAlignment.Stretch, flyout.VerticalAlignment);
-            Assert.Equal(view.Bounds.Height - 60, flyout.Bounds.Height, precision: 1);
+            Assert.Equal(view.Bounds.Height - 61, flyout.Bounds.Height, precision: 1);
             double panelBottom = panel.TranslatePoint(
                 new Point(0, panel.Bounds.Height), view)!.Value.Y;
             Assert.Equal(view.Bounds.Height - 20, panelBottom, precision: 1);

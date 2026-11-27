@@ -14,9 +14,12 @@
         </ResourceDictionary>
     </UserControl.Resources>
     <UserControl.Styles>
+        <!-- The reader header is a single 34-DIP row: page navigation, table of contents and
+             every tool button share it, so the flyout tails sit the same distance below each
+             anchor. Keep 34 here rather than reintroducing a second control height. -->
         <Style Selector="Button.tool-button">
-            <Setter Property="Width" Value="32" />
-            <Setter Property="Height" Value="32" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -42,8 +45,8 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="ToggleButton.tool-button">
-            <Setter Property="Width" Value="32" />
-            <Setter Property="Height" Value="32" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -139,29 +142,31 @@
             <Setter Property="Background" Value="{DynamicResource WorkspaceSurfaceBrush}" />
             <Setter Property="CornerRadius" Value="8" />
         </Style>
+        <!-- Keep all three flyouts one DIP below the header: 41 + 8 - 48 = 1.
+             Closed margins retain the same eight-DIP opening animation. -->
         <Style Selector="Grid.toc-flyout">
             <Setter Property="Opacity" Value="0" />
-            <Setter Property="Margin" Value="0,32,0,20" />
+            <Setter Property="Margin" Value="0,33,0,20" />
         </Style>
         <Style Selector="Grid.toc-flyout.open">
             <Setter Property="Opacity" Value="1" />
-            <Setter Property="Margin" Value="0,40,0,20" />
+            <Setter Property="Margin" Value="0,41,0,20" />
         </Style>
         <Style Selector="Grid.page-jump-flyout">
             <Setter Property="Opacity" Value="0" />
-            <Setter Property="Margin" Value="0,32,16,0" />
+            <Setter Property="Margin" Value="0,33,16,0" />
         </Style>
         <Style Selector="Grid.page-jump-flyout.open">
             <Setter Property="Opacity" Value="1" />
-            <Setter Property="Margin" Value="0,40,16,0" />
+            <Setter Property="Margin" Value="0,41,16,0" />
         </Style>
         <Style Selector="Grid.highlight-flyout">
             <Setter Property="Opacity" Value="0" />
-            <Setter Property="Margin" Value="0,32,0,0" />
+            <Setter Property="Margin" Value="0,33,0,0" />
         </Style>
         <Style Selector="Grid.highlight-flyout.open">
             <Setter Property="Opacity" Value="1" />
-            <Setter Property="Margin" Value="0,40,0,0" />
+            <Setter Property="Margin" Value="0,41,0,0" />
         </Style>
         <Style Selector="ToggleButton.toc-expander">
             <Setter Property="Width" Value="24" />
@@ -287,7 +292,11 @@
                         HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"
                         IsVisible="{Binding IsLoaded}">
                     <StackPanel Orientation="Horizontal" Spacing="5" Height="34">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="2,0,7,0">
+                        <!-- This row must stay an even width. The header centres it between two
+                             equal star columns, so an odd width gets rounded onto a half DIP and
+                             the toolbar drifts 0.5 DIP off the page centre. The extra DIP sits on
+                             the label group's left inset (3 instead of 2). -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="3,0,7,0">
                             <Border Background="#F0EDFF" CornerRadius="7" Padding="7,4">
                                 <TextBlock Text="PDF" FontSize="10" FontWeight="Bold" Foreground="#6C5CE7" />
                             </Border>
@@ -296,7 +305,7 @@
                         </StackPanel>
                         <Border Width="1" Height="20" Background="#ECECF2" VerticalAlignment="Center" Margin="3,0" />
 
-                        <Grid x:Name="ZoomControls" Width="132" Height="32" ColumnDefinitions="44,44,44" VerticalAlignment="Center">
+                        <Grid x:Name="ZoomControls" Width="132" Height="34" ColumnDefinitions="44,44,44" VerticalAlignment="Center">
                             <Button x:Name="ZoomOutButton" Classes="tool-button"
                                     HorizontalAlignment="Center" VerticalAlignment="Center"
                                     Click="OnZoomOutClick" ToolTip.Tip="缩小">
@@ -317,7 +326,7 @@
                             <i:Icon Value="fa-solid fa-magnifying-glass" FontSize="14"
                                     Foreground="{Binding $parent[Button].Foreground}" />
                         </Button>
-                        <ToggleButton x:Name="HighlightButton" Classes="tool-button highlight-button" Width="33"
+                        <ToggleButton x:Name="HighlightButton" Classes="tool-button highlight-button"
                                       IsChecked="{Binding IsHighlightMode, Mode=OneWay}" Click="OnHighlightButtonClick"
                                       ToolTip.Tip="高亮颜色 · 拖动选择或单击单词；Esc 退出">
                             <Grid Width="20" Height="24">
@@ -359,10 +368,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="PageNavigation" Classes="page-navigation" Padding="0" Height="34" Width="144" Grid.Column="2"
+                <Border x:Name="PageNavigation" Classes="page-navigation" Padding="0" Height="34" Width="148" Grid.Column="2"
                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0"
                         IsVisible="{Binding IsLoaded}">
-                    <Grid ColumnDefinitions="32,*,32" ColumnSpacing="3">
+                    <Grid ColumnDefinitions="34,*,34" ColumnSpacing="3">
                         <Button x:Name="PreviousPageButton" Classes="tool-button" Click="OnPreviousPageClick"
                                 IsEnabled="{Binding CanGoToPreviousPage}" ToolTip.Tip="上一页">
                             <i:Icon Value="fa-solid fa-chevron-left" FontSize="11"

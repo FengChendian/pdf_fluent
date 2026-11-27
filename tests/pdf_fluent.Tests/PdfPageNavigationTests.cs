@@ -35,23 +35,23 @@ public sealed class PdfPageNavigationTests
             Rect viewportBounds = viewport.Bounds;
             Assert.False(overlay.IsVisible);
             Assert.Equal(0, overlay.Opacity);
-            Assert.Equal(new Thickness(0, 32, 16, 0), overlay.Margin);
+            Assert.Equal(new Thickness(0, 33, 16, 0), overlay.Margin);
 
             Click(window, indicator);
             window.UpdateLayout();
             Assert.True(overlay.IsVisible);
             Assert.True(input.IsKeyboardFocusWithin);
             Assert.True(overlay.Opacity < 1);
-            Assert.True(overlay.Margin.Top < 40);
+            Assert.True(overlay.Margin.Top < 41);
 
             await Task.Delay(260);
             window.UpdateLayout();
             Assert.Equal(1, overlay.Opacity);
-            Assert.Equal(new Thickness(0, 40, 16, 0), overlay.Margin);
+            Assert.Equal(new Thickness(0, 41, 16, 0), overlay.Margin);
             Assert.Equal(viewportBounds, viewport.Bounds);
             var panel = Named<Border>(view, "PageJumpPanel");
             var header = Named<Border>(view, "ReaderHeader");
-            Assert.Equal(header.Bounds.Bottom, panel.TranslatePoint(default, view)!.Value.Y, precision: 1);
+            Assert.Equal(header.Bounds.Bottom + 1, panel.TranslatePoint(default, view)!.Value.Y, precision: 1);
 
             Click(window, indicator);
             Assert.False(overlay.IsVisible);
@@ -60,11 +60,11 @@ public sealed class PdfPageNavigationTests
             window.UpdateLayout();
             Assert.True(overlay.IsVisible);
             Assert.True(overlay.Opacity < 1);
-            Assert.True(overlay.Margin.Top < 40);
+            Assert.True(overlay.Margin.Top < 41);
             await Task.Delay(260);
             window.UpdateLayout();
             Assert.Equal(1, overlay.Opacity);
-            Assert.Equal(new Thickness(0, 40, 16, 0), overlay.Margin);
+            Assert.Equal(new Thickness(0, 41, 16, 0), overlay.Margin);
         }
         finally { window.Close(); }
     }

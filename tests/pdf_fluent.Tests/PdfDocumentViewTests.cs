@@ -677,9 +677,9 @@ public sealed class PdfDocumentViewTests
             window.UpdateLayout();
             await Task.Delay(260);
             window.UpdateLayout();
-            Assert.Equal(headerBottom,
+            Assert.Equal(headerBottom + 1,
                 Named<Border>(view, "TableOfContentsPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
-            Assert.Equal(headerBottom - 8,
+            Assert.Equal(headerBottom - 7,
                 Named<Path>(view, "TableOfContentsPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
 
             tocButton.IsChecked = false;
@@ -689,9 +689,9 @@ public sealed class PdfDocumentViewTests
             window.UpdateLayout();
             await Task.Delay(260);
             window.UpdateLayout();
-            Assert.Equal(headerBottom,
+            Assert.Equal(headerBottom + 1,
                 Named<Border>(view, "PageJumpPanel").TranslatePoint(default, view)!.Value.Y, precision: 1);
-            Assert.Equal(headerBottom - 8,
+            Assert.Equal(headerBottom - 7,
                 Named<Path>(view, "PageJumpPointer").TranslatePoint(default, view)!.Value.Y, precision: 1);
         }
         finally { window.Close(); }
@@ -726,7 +726,7 @@ public sealed class PdfDocumentViewTests
 
             Assert.True(overlay.IsVisible);
             Assert.Equal(navigation.Bounds.Width, overlay.Bounds.Width, precision: 1);
-            Assert.Equal(new Thickness(0, 40, 16, 0), overlay.Margin);
+            Assert.Equal(new Thickness(0, 41, 16, 0), overlay.Margin);
             Assert.Equal(34, input.Bounds.Height);
             Assert.Equal(input.Bounds.Height, goToPage.Bounds.Height);
             var jumpButtonSurface = Named<Avalonia.Controls.Presenters.ContentPresenter>(goToPage, "PART_ContentPresenter");
@@ -753,7 +753,7 @@ public sealed class PdfDocumentViewTests
             Assert.Equal(Center(indicator, window).X, Center(pointer, window).X, precision: 1);
 
             double panelTop = panel.TranslatePoint(new Point(0, 0), view)!.Value.Y;
-            Assert.Equal(48, panelTop, precision: 1);
+            Assert.Equal(Named<Border>(view, "ReaderHeader").Bounds.Bottom + 1, panelTop, precision: 1);
             Point pointerStartInPanel = pointer.TranslatePoint(new Point(0, 8), panel)!.Value;
             Assert.Equal(0, pointerStartInPanel.Y, precision: 1);
             Assert.InRange(pointerStartInPanel.X, 0, panel.Bounds.Width - 20);
