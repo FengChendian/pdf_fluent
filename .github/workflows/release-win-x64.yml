@@ -211,12 +211,14 @@ jobs:
           if ($installer.Length -eq 0) {
             throw 'The installer is empty; R2 publishing has been stopped.'
           }
+          $sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 
           # AWS CLI is preinstalled on windows-latest. Always upload and verify
           # the new installer before deleting any previous version.
           aws s3 cp $installer.FullName "s3://$bucket/$fileName" `
             --endpoint-url $endpoint --only-show-errors --no-progress `
-            --content-type application/vnd.microsoft.portable-executable
+            --content-type application/vnd.microsoft.portable-executable `
+            --metadata "sha256=$sha256" --cache-control 'public, max-age=31536000, immutable'
           if ($LASTEXITCODE -ne 0) {
             throw 'R2 installer upload failed; old versions have not been deleted.'
           }
@@ -254,6 +256,29 @@ jobs:
           # release must not evict newer releases because of its upload date.
           $versions = @($installers.Version | Sort-Object -Descending -Unique)
           $keep = @($versions | Select-Object -First 3)
+          if ([version]$env:RELEASE_VERSION -eq $versions[0]) {
+            # Publish the manifest only after the referenced installer is available.
+            # An older tag rerun must never roll the update channel backwards.
+            $manifest = [ordered]@{
+              schemaVersion = 1
+              version = $env:RELEASE_VERSION
+              downloadUrl = "https://pdf-fluent.yichen.xyz/$([uri]::EscapeDataString($fileName))"
+              size = $installer.Length
+              sha256 = $sha256
+              publishedAt = [DateTimeOffset]::UtcNow.ToString('O')
+            }
+            $manifestPath = Join-Path 'artifacts/installer' 'config.json'
+            $manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+            aws s3 cp $manifestPath "s3://$bucket/config.json" `
+              --endpoint-url $endpoint --only-show-errors --no-progress `
+              --content-type 'application/json; charset=utf-8' --cache-control 'no-store, max-age=0'
+            if ($LASTEXITCODE -ne 0) {
+              throw 'R2 update manifest upload failed; old versions have not been deleted.'
+            }
+          }
+          else {
+            Write-Output 'Skipping manifest publication for an older release.'
+          }
           foreach ($item in $installers) {
             if ($item.Version -notin $keep) {
               Write-Output "Removing old R2 installer: $($item.Key)"

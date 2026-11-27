@@ -28,6 +28,7 @@ public partial class MainWindow : Window
             {
                 viewModel.PdfFilePicker = PickPdfFileAsync;
                 viewModel.DocumentCloseConfirmation = ConfirmDocumentCloseAsync;
+                viewModel.Settings.CloseForUpdateAsync = CloseForUpdateAsync;
             }
         };
         Closing += OnWindowClosing;
@@ -98,6 +99,23 @@ public partial class MainWindow : Window
         {
             _isConfirmingClose = false;
         }
+    }
+
+    internal async Task<bool> CloseForUpdateAsync(Action commitUpdate)
+    {
+        if (_isConfirmingClose || _closeConfirmed || DataContext is not MainViewModel viewModel) return false;
+        _isConfirmingClose = true;
+        try
+        {
+            if (!await viewModel.ConfirmCloseAllDocumentsAsync()) return false;
+            // No awaits between committing the handoff and closing the window.
+            // Cancellation or a failed save never launches the installer.
+            commitUpdate();
+            _closeConfirmed = true;
+            Close();
+            return true;
+        }
+        finally { _isConfirmingClose = false; }
     }
 
     private async Task<DocumentCloseDecision> ConfirmDocumentCloseAsync(DocumentTabViewModel document)

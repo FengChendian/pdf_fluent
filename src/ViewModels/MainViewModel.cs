@@ -32,15 +32,15 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         RecentDocumentsService recentService,
         FavoriteDocumentsService favoriteService,
         TimeSpan? statusMessageDuration = null,
-        IUpdateCheckService? updateCheckService = null)
+        IUpdateCheckService? updateCheckService = null,
+        IUpdateInstallerService? updateInstallerService = null)
     {
         _pdfService = pdfService;
         _recentService = recentService;
         _favoriteService = favoriteService;
         StartupTrace.Mark("MainViewModel.ctor.enter");
-        Settings = updateCheckService is null
-            ? new SettingsViewModel()
-            : new SettingsViewModel(updateCheckService, ApplicationVersion.Current);
+        Settings = new SettingsViewModel(updateCheckService ?? new R2UpdateCheckService(),
+            ApplicationVersion.Current, updateInstallerService);
         StartupTrace.Mark("MainViewModel.SettingsViewModel");
         _statusMessageTimer = new DispatcherTimer
         {

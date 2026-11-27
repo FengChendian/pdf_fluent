@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using pdf_fluent.Services;
 using pdf_fluent.ViewModels;
 using Xunit;
@@ -9,134 +10,190 @@ namespace pdf_fluent.Tests;
 public sealed class UpdateCheckTests
 {
     [Theory]
-    [InlineData("v0.5.0", true)]
+    [InlineData("0.5.0", true)]
     [InlineData("0.4.3", true)]
-    [InlineData("v0.4.2", false)]
-    [InlineData("v0.4.1", false)]
-    [InlineData("v0.4.2-beta.1", false)]
-    [InlineData("v0.4.2+build.7", false)]
-    public async Task LatestReleaseTagIsComparedWithTheCurrentVersion(string tag, bool expectedUpdate)
+    [InlineData("0.4.2", false)]
+    [InlineData("0.4.1", false)]
+    [InlineData("0.10.0", true)]
+    public async Task ManifestVersionIsComparedWithTheCurrentVersion(string version, bool expectedUpdate)
     {
-        using var httpClient = new HttpClient(new StubHttpHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(
-                $"<feed xmlns=\"http://www.w3.org/2005/Atom\"><entry>" +
-                $"<id>tag:github.com,2008:Repository/123456/{tag}</id>" +
-                $"<link rel=\"alternate\" type=\"text/html\" href=\"https://github.com/FengChendian/pdf_fluent/releases/tag/{tag}\" />" +
-                $"<title>Fluent PDF {tag}</title></entry></feed>"),
-        })));
-        using var service = new GitHubUpdateCheckService(httpClient, TimeSpan.FromSeconds(1));
-
+        using var client = UpdateTestData.Client(UpdateTestData.Manifest(version));
+        using var service = new R2UpdateCheckService(client, TimeSpan.FromSeconds(1));
         UpdateCheckResult result = await service.CheckForUpdateAsync(
             new Version(0, 4, 2), TestContext.Current.CancellationToken);
-
         Assert.Equal(expectedUpdate, result.IsUpdateAvailable);
-        Assert.Equal(tag, result.LatestVersion);
-        Assert.EndsWith($"/tag/{tag}", result.ReleaseUrl);
+        Assert.Equal($"v{version}", result.LatestVersion);
+        Assert.Equal(UpdateTestData.Package(version), result.Package);
     }
 
-    [Fact]
-    public async Task UpdateServiceUsesTheRepositoryReleasesFeedAndTimesOut()
+    [Theory]
+    [InlineData("v0.4.2-beta.1", false)]
+    [InlineData("v0.4.2+build.7", false)]
+    [InlineData("v0.10.0", true)]
+    public void VersionComparisonSupportsExistingTags(string tag, bool expectedUpdate) =>
+        Assert.Equal(expectedUpdate, ReleaseVersionComparer.Compare(tag, new Version(0, 4, 2)) > 0);
+
+    [Theory]
+    [InlineData(2, "https://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.5.0%20win-x64.exe", 1, "valid")]
+    [InlineData(1, "https://other.example/Fluent%20PDF%20Setup%200.5.0%20win-x64.exe", 1, "valid")]
+    [InlineData(1, "http://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.5.0%20win-x64.exe", 1, "valid")]
+    [InlineData(1, "https://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.4.0%20win-x64.exe", 1, "valid")]
+    [InlineData(1, "https://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.5.0%20win-x64.exe", 0, "valid")]
+    [InlineData(1, "https://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.5.0%20win-x64.exe", 1, "invalid")]
+    public async Task InvalidOrUntrustedManifestsAreRejected(int schemaVersion, string url, long size, string hash)
     {
-        HttpRequestMessage? request = null;
-        using var httpClient = new HttpClient(new StubHttpHandler(async (_, cancellationToken) =>
+        string json = JsonSerializer.Serialize(new
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            throw new InvalidOperationException("Unreachable");
-        })
-        {
-            OnSend = message => request = message,
+            schemaVersion, version = "0.5.0", downloadUrl = url, size,
+            sha256 = hash == "valid" ? UpdateTestData.Hash : hash,
         });
-        using var service = new GitHubUpdateCheckService(httpClient, TimeSpan.FromMilliseconds(30));
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            service.CheckForUpdateAsync(new Version(0, 4, 2), TestContext.Current.CancellationToken));
-
-        Assert.NotNull(request);
-        Assert.Equal(GitHubUpdateCheckService.ReleasesFeedUrl, request.RequestUri?.ToString());
-        Assert.Contains(request.Headers.UserAgent, value => value.Product?.Name == "Fluent-PDF-Update-Checker");
+        using var client = UpdateTestData.Client(json);
+        using var service = new R2UpdateCheckService(client, TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.CheckForUpdateAsync(
+            new Version(0, 4, 2), TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task UpdateViewModelShowsProgressThenExposesTheDownloadAction()
+    public async Task ManifestRequestBypassesCacheAndTimesOut()
     {
-        var completion = new TaskCompletionSource<UpdateCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var service = new StubUpdateService((_, _) => completion.Task);
-        string? openedUrl = null;
-        using var viewModel = new SettingsViewModel(service, new Version(0, 4, 2), url => openedUrl = url);
+        Uri? requestUri = null;
+        bool noCache = false;
+        using var client = new HttpClient(new UpdateTestData.HttpHandler(async (request, token) =>
+        {
+            requestUri = request.RequestUri;
+            noCache = request.Headers.CacheControl is { NoCache: true, NoStore: true };
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new InvalidOperationException("Unreachable");
+        }));
+        using var service = new R2UpdateCheckService(client, TimeSpan.FromMilliseconds(30));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CheckForUpdateAsync(
+            new Version(0, 4, 2), TestContext.Current.CancellationToken));
+        Assert.Equal(R2UpdateCheckService.ManifestUrl, requestUri?.AbsoluteUri);
+        Assert.True(noCache);
+    }
 
-        Task check = viewModel.CheckForUpdatesOnStartupAsync();
-        Assert.True(viewModel.IsCheckingUpdate);
+    [Fact]
+    public async Task UpdateActionDownloadsBeforeRequestingShutdownAndBlocksDuplicateActions()
+    {
+        var check = new TaskCompletionSource<UpdateCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var download = new TaskCompletionSource<IPreparedUpdate>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var installer = new UpdateTestData.Installer((_, _, _) => download.Task);
+        using var viewModel = new SettingsViewModel(new UpdateTestData.Checker(check.Task), new Version(0, 4, 2), installer);
+        int shutdownRequests = 0;
+        viewModel.CloseForUpdateAsync = commit =>
+        {
+            shutdownRequests++;
+            commit();
+            return Task.FromResult(true);
+        };
+        Task checking = viewModel.CheckForUpdatesOnStartupAsync();
+        Assert.True(viewModel.IsBusy);
         Assert.Equal("检查中", viewModel.UpdateButtonText);
+        check.SetResult(UpdateTestData.Result());
+        await checking;
+        Assert.Equal("下载并更新", viewModel.UpdateButtonText);
+
+        Task updating = viewModel.UpdateActionCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsInstallingUpdate);
+        Assert.False(viewModel.UpdateActionCommand.CanExecute(null));
+        Assert.False(viewModel.DownloadUpdateCommand.CanExecute(null));
+        Assert.Equal(0, shutdownRequests);
+        var prepared = new UpdateTestData.PreparedUpdate();
+        download.SetResult(prepared);
+        await updating;
+        Assert.Equal(1, shutdownRequests);
+        Assert.True(prepared.Committed);
+        Assert.True(prepared.Disposed);
+    }
+
+    [Fact]
+    public async Task CancellingUnsavedDocumentPromptDisposesTheUncommittedUpdate()
+    {
+        var prepared = new UpdateTestData.PreparedUpdate();
+        var installer = new UpdateTestData.Installer((_, _, _) => Task.FromResult<IPreparedUpdate>(prepared));
+        using var viewModel = new SettingsViewModel(new UpdateTestData.Checker(Task.FromResult(UpdateTestData.Result())),
+            new Version(0, 4, 2), installer) { CloseForUpdateAsync = _ => Task.FromResult(false) };
         await viewModel.CheckForUpdatesOnStartupAsync();
-        Assert.Equal(1, service.CallCount);
-
-        completion.SetResult(new UpdateCheckResult(
-            "v0.5.0", "https://github.com/FengChendian/pdf_fluent/releases/tag/v0.5.0", true));
-        await check;
-
-        Assert.False(viewModel.IsCheckingUpdate);
-        Assert.True(viewModel.HasAvailableUpdate);
-        Assert.Equal("前往下载", viewModel.UpdateButtonText);
-        Assert.Equal("发现新版本 v0.5.0", viewModel.UpdateStatusMessage);
         await viewModel.UpdateActionCommand.ExecuteAsync(null);
-        Assert.Equal("https://github.com/FengChendian/pdf_fluent/releases/tag/v0.5.0", openedUrl);
+        Assert.False(prepared.Committed);
+        Assert.True(prepared.Disposed);
+        Assert.False(viewModel.IsBusy);
+        Assert.Equal("已取消更新，应用将保持打开", viewModel.UpdateStatusMessage);
+    }
+
+    [Fact]
+    public async Task FailedVerificationNeverRequestsShutdownAndAllowsRetry()
+    {
+        var installer = new UpdateTestData.Installer((_, _, _) =>
+            Task.FromException<IPreparedUpdate>(new InvalidDataException("checksum mismatch")));
+        bool closed = false;
+        using var viewModel = new SettingsViewModel(new UpdateTestData.Checker(Task.FromResult(UpdateTestData.Result())),
+            new Version(0, 4, 2), installer)
+        {
+            CloseForUpdateAsync = _ => { closed = true; return Task.FromResult(true); },
+        };
+        await viewModel.CheckForUpdatesOnStartupAsync();
+        await viewModel.UpdateActionCommand.ExecuteAsync(null);
+        Assert.False(closed);
+        Assert.True(viewModel.HasAvailableUpdate);
+        Assert.True(viewModel.UpdateActionCommand.CanExecute(null));
+        Assert.Equal("安装包校验失败，请重新下载", viewModel.UpdateStatusMessage);
     }
 
     [Fact]
     public async Task UpToDateAndFailedChecksKeepTheCheckUpdateAction()
     {
-        using var upToDate = new SettingsViewModel(
-            new StubUpdateService((_, _) => Task.FromResult(new UpdateCheckResult(
-                "v0.4.2", GitHubUpdateCheckService.ReleasesPageUrl, false))),
-            new Version(0, 4, 2));
+        using var upToDate = new SettingsViewModel(new UpdateTestData.Checker(
+            Task.FromResult(UpdateTestData.Result("0.4.2", false))), new Version(0, 4, 2));
         await upToDate.CheckForUpdatesOnStartupAsync();
         Assert.Equal("检查更新", upToDate.UpdateButtonText);
         Assert.False(upToDate.HasAvailableUpdate);
         Assert.Equal("当前已是最新版本", upToDate.UpdateStatusMessage);
-
-        using var failed = new SettingsViewModel(
-            new StubUpdateService((_, _) => Task.FromException<UpdateCheckResult>(new HttpRequestException())),
-            new Version(0, 4, 2));
+        using var failed = new SettingsViewModel(new UpdateTestData.Checker(
+            Task.FromException<UpdateCheckResult>(new HttpRequestException())), new Version(0, 4, 2));
         await failed.CheckForUpdatesOnStartupAsync();
         Assert.Equal("检查更新", failed.UpdateButtonText);
-        Assert.False(failed.HasAvailableUpdate);
-        Assert.False(failed.IsCheckingUpdate);
+        Assert.False(failed.IsBusy);
         Assert.Equal("检查失败，请检查网络后重试", failed.UpdateStatusMessage);
-
-        using var timedOut = new SettingsViewModel(
-            new StubUpdateService((_, _) => Task.FromCanceled<UpdateCheckResult>(new CancellationToken(true))),
-            new Version(0, 4, 2));
+        using var timedOut = new SettingsViewModel(new UpdateTestData.Checker(
+            Task.FromCanceled<UpdateCheckResult>(new CancellationToken(true))), new Version(0, 4, 2));
         await timedOut.CheckForUpdatesOnStartupAsync();
-        Assert.Equal("检查更新", timedOut.UpdateButtonText);
         Assert.Equal("检查超时，请稍后重试", timedOut.UpdateStatusMessage);
     }
+}
 
-    private sealed class StubUpdateService(
-        Func<Version, CancellationToken, Task<UpdateCheckResult>> check) : IUpdateCheckService
+internal static class UpdateTestData
+{
+    public static string Hash => new('a', 64);
+    public static UpdatePackage Package(string version = "0.5.0") => new(version,
+        new Uri($"https://pdf-fluent.yichen.xyz/{Uri.EscapeDataString($"Fluent PDF Setup {version} win-x64.exe")}"), 1, Hash);
+    public static UpdateCheckResult Result(string version = "0.5.0", bool available = true) => new($"v{version}", available, Package(version));
+    public static string Manifest(string version) => JsonSerializer.Serialize(new
     {
-        public int CallCount { get; private set; }
+        schemaVersion = 1, version, downloadUrl = Package(version).DownloadUri.AbsoluteUri, size = 1, sha256 = Hash,
+    });
+    public static HttpClient Client(string content) => new(new HttpHandler((_, _) => Task.FromResult(
+        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(content) })));
 
-        public Task<UpdateCheckResult> CheckForUpdateAsync(
-            Version currentVersion,
-            CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            return check(currentVersion, cancellationToken);
-        }
+    internal sealed class HttpHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            send(request, cancellationToken);
     }
-
-    private sealed class StubHttpHandler(
-        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
+    internal sealed class Checker(Task<UpdateCheckResult> result) : IUpdateCheckService
     {
-        public Action<HttpRequestMessage>? OnSend { get; init; }
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            OnSend?.Invoke(request);
-            return send(request, cancellationToken);
-        }
+        public Task<UpdateCheckResult> CheckForUpdateAsync(Version currentVersion, CancellationToken cancellationToken = default) => result;
+    }
+    internal sealed class Installer(Func<UpdatePackage, IProgress<int>?, CancellationToken, Task<IPreparedUpdate>> prepare) : IUpdateInstallerService
+    {
+        public Task<IPreparedUpdate> PrepareAsync(UpdatePackage package, IProgress<int>? progress, CancellationToken cancellationToken) =>
+            prepare(package, progress, cancellationToken);
+    }
+    internal sealed class PreparedUpdate : IPreparedUpdate
+    {
+        public bool Committed { get; private set; }
+        public bool Disposed { get; private set; }
+        public void Commit() => Committed = true;
+        public void Dispose() => Disposed = true;
     }
 }

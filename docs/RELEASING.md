@@ -8,18 +8,66 @@
 | --- | --- |
 | `src/pdf_fluent.csproj` | 唯一版本号来源 |
 | `installer/PDFFluent.iss` | Inno Setup 安装包配置 |
-| `.github/workflows/release-win-x64.yml` | 测试、发布、打包及 GitHub Release 自动化 |
+| `.github/workflows/release-win-x64.yml` | 发布、打包、GitHub Release 及 R2 自动化 |
 
 发布工作流依次执行：
 
 1. 校验 Git 标签与项目版本号一致。
-2. 运行完整测试套件。
+2. 测试步骤当前注释，发布不会自动运行测试。
 3. 发布自包含的 `win-x64` 应用（启用 ReadyToRun / Composite R2R）。
 4. 使用 Inno Setup 编译安装包。
 5. 上传 GitHub Actions 构建产物。
 6. 创建对应的 GitHub Release 并附加安装包。
+7. 上传安装包到 R2，成功后发布更新清单，最后仅保留版本号最高的三个安装包。
 
 普通分支推送不会触发发布，只有推送 `v*` 标签才会触发。
+
+## R2 更新源
+
+工作流使用 GitHub Environment `CLOUDFLARE_TOKEN`，其中必须配置 Environment secrets：
+
+- `API_URL`：带桶名的完整 S3 地址，例如 `https://<account-id>.r2.cloudflarestorage.com/pdf-fluent`。
+- `API_TOKEN`：拥有该桶对象读写权限的原始 R2 API Token；不是 S3 Secret Access Key。
+
+公开下载域名为 `https://pdf-fluent.yichen.xyz`。R2 公开域名不能列举桶内对象，因此应用读取
+`https://pdf-fluent.yichen.xyz/config.json` 检查更新，不再依赖 GitHub Atom。发布工作流自动生成：
+
+```json
+{
+  "schemaVersion": 1,
+  "version": "0.11.0",
+  "downloadUrl": "https://pdf-fluent.yichen.xyz/Fluent%20PDF%20Setup%200.11.0%20win-x64.exe",
+  "size": 123456789,
+  "sha256": "<安装包 SHA-256，64 位十六进制>",
+  "publishedAt": "2026-11-27T00:00:00.0000000+00:00"
+}
+```
+
+清单在对应安装包上传及大小验证成功后才上传，上传失败不会执行旧版本清理。
+重跑旧标签不会回退清单。安装包按版本号降序保留三个，`config.json` 和其他对象不参与删除。
+安装包有长期缓存，因此已发布的版本号和文件内容应保持不变；修改后使用新版本号。
+清单使用 `Cache-Control: no-store, max-age=0`，客户端也请求跳过缓存。
+如果域名配置了强制缓存规则，请为 `/config.json` 设置绕过缓存，避免旧清单指向已淘汰的安装包。
+
+## 应用内安装更新
+
+设置中的“下载并更新”会从公开域名流式下载安装包，同时检查大小和 SHA-256。
+下载完成后先确认未保存的 PDF 高亮；取消或保存失败时保持应用打开，并回收本次下载文件。
+确认关闭后，独立 Windows PowerShell 辅助进程等待阅读器完全退出，再启动 Inno Setup 静默更新。
+只提升安装器权限，安装完成后由辅助进程以原用户权限重启阅读器，不要求或触发系统自动重启。
+Windows 的 UAC 确认仍需用户操作；取消 UAC 或安装失败时会提示并尝试重新打开应用。
+
+辅助进程会重试删除安装包、自身脚本和交接标记。安装日志保留在
+`%TEMP%\FluentPDF-Updates\<本次更新 ID>\update.log`，便于定位安装故障。
+企业策略禁用 Windows PowerShell 时，辅助进程无法就绪，阅读器会保持打开并提示更新失败。
+当前方案沿用既有 Inno Setup 安装标识和路径，属于全量安装包更新，不提供增量更新或自动回滚。
+
+首次发布此功能后，旧版仍使用原来的 GitHub 下载页面；安装一次包含此功能的新版后，
+后续版本才会使用 R2 清单和应用内下载安装流程。发布前仍需更新项目版本号，并让标签指向包含改动的提交。
+
+设计依据：[R2 公开桶](https://developers.cloudflare.com/r2/buckets/public-buckets/)、
+[Velopack 的发布清单模式](https://docs.velopack.io/distributing/overview)、
+[Inno Setup 命令行参数](https://jrsoftware.org/ishelp/topic_setupcmdline.htm)。
 
 ## 启动性能约定
 

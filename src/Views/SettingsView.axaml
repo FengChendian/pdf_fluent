@@ -93,7 +93,7 @@
                                            Foreground="#303347" />
                                 <TextBlock FontSize="11" Foreground="#969BAC" TextWrapping="Wrap">
                                     <TextBlock.Text>
-                                        <MultiBinding StringFormat="当前版本 {0} · 发现新版本时可前往 GitHub 下载">
+                                        <MultiBinding StringFormat="当前版本 {0} · 更新将自动下载安装并重启应用">
                                             <Binding Path="Settings.CurrentVersionText" />
                                         </MultiBinding>
                                     </TextBlock.Text>
@@ -113,7 +113,7 @@
                                         <i:Icon x:Name="UpdateProgressRing" Classes="update-spinner"
                                                 Value="fa-solid fa-circle-notch" FontSize="14"
                                                 RenderTransformOrigin="50%,50%"
-                                                IsVisible="{Binding Settings.IsCheckingUpdate}">
+                                                IsVisible="{Binding Settings.IsBusy}">
                                             <i:Icon.RenderTransform>
                                                 <RotateTransform Angle="0" />
                                             </i:Icon.RenderTransform>
