@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  # R2 retention is shared by all versions; serialize uploads and cleanup.
+  group: release-win-x64
   cancel-in-progress: false
 
 jobs:
@@ -130,3 +131,136 @@ jobs:
           generate_release_notes: true
           files: artifacts/installer/*.exe
           fail_on_unmatched_files: true
+
+      - name: Upload installer to R2 and retain the latest three versions
+        shell: pwsh
+        env:
+          # Full S3 bucket URL, e.g. https://<account-id>.r2.cloudflarestorage.com/pdf-fluent
+          API_URL: ${{ secrets.API_URL }}
+          # Original Cloudflare R2 API token value, NOT the S3 Secret Access Key.
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_RETRY_MODE: standard
+          AWS_MAX_ATTEMPTS: "5"
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          if ([string]::IsNullOrWhiteSpace($env:API_URL) -or
+              [string]::IsNullOrWhiteSpace($env:API_TOKEN)) {
+            throw 'GitHub secrets API_URL and API_TOKEN are required for R2 publishing.'
+          }
+
+          $bucketUri = [uri]$env:API_URL.Trim()
+          if ($bucketUri.Scheme -ne 'https' -or
+              $bucketUri.Host -notmatch '^(?<account>[a-f0-9]{32})(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$' -or
+              $bucketUri.Query -or $bucketUri.Fragment -or $bucketUri.UserInfo -or
+              -not $bucketUri.IsDefaultPort) {
+            throw 'API_URL must be an HTTPS R2 S3 bucket URL without credentials, query parameters or fragments.'
+          }
+
+          $accountId = $Matches.account
+          $bucket = $bucketUri.AbsolutePath.Trim('/')
+          if ($bucket -notmatch '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$') {
+            throw 'API_URL must include exactly one bucket name after the hostname.'
+          }
+          $endpoint = $bucketUri.GetLeftPart([System.UriPartial]::Authority)
+
+          # Both account API tokens and user API tokens are supported. Cloudflare
+          # defines S3 Access Key ID = token ID; Secret Access Key = SHA256(token).
+          # https://developers.cloudflare.com/r2/api/tokens/#get-s3-api-credentials-from-an-api-token
+          $token = $env:API_TOKEN.Trim()
+          $headers = @{ Authorization = "Bearer $token" }
+          $accessKeyId = $null
+          $verifyUrls = @(
+            "https://api.cloudflare.com/client/v4/accounts/$accountId/tokens/verify",
+            'https://api.cloudflare.com/client/v4/user/tokens/verify'
+          )
+          foreach ($verifyUrl in $verifyUrls) {
+            $response = Invoke-WebRequest -Uri $verifyUrl -Headers $headers `
+              -SkipHttpErrorCheck -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 2
+            if ([int]$response.StatusCode -ne 200) {
+              continue
+            }
+            $verification = $response.Content | ConvertFrom-Json
+            if ($verification.success -eq $true -and
+                $verification.result.status -eq 'active' -and
+                $verification.result.id -match '^[a-f0-9]{32}$') {
+              $accessKeyId = $verification.result.id
+              break
+            }
+          }
+          if (-not $accessKeyId) {
+            throw 'Could not verify API_TOKEN. Use the original active R2 API token with Object Read & Write permission for this bucket, not its S3 Secret Access Key.'
+          }
+
+          $secretAccessKey = [Convert]::ToHexString(
+            [System.Security.Cryptography.SHA256]::HashData(
+              [System.Text.Encoding]::UTF8.GetBytes($token)
+            )
+          ).ToLowerInvariant()
+          Write-Output "::add-mask::$accessKeyId"
+          Write-Output "::add-mask::$secretAccessKey"
+          $env:AWS_ACCESS_KEY_ID = $accessKeyId
+          $env:AWS_SECRET_ACCESS_KEY = $secretAccessKey
+
+          $fileName = "Fluent PDF Setup $env:RELEASE_VERSION win-x64.exe"
+          $installer = Get-Item -LiteralPath (Join-Path 'artifacts/installer' $fileName)
+          if ($installer.Length -eq 0) {
+            throw 'The installer is empty; R2 publishing has been stopped.'
+          }
+
+          # AWS CLI is preinstalled on windows-latest. Always upload and verify
+          # the new installer before deleting any previous version.
+          aws s3 cp $installer.FullName "s3://$bucket/$fileName" `
+            --endpoint-url $endpoint --only-show-errors --no-progress `
+            --content-type application/vnd.microsoft.portable-executable
+          if ($LASTEXITCODE -ne 0) {
+            throw 'R2 installer upload failed; old versions have not been deleted.'
+          }
+
+          $headJson = aws s3api head-object --bucket $bucket --key $fileName `
+            --endpoint-url $endpoint --output json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'R2 upload verification failed; old versions have not been deleted.'
+          }
+          $head = $headJson | ConvertFrom-Json
+          if ($head.ContentLength -ne $installer.Length) {
+            throw 'R2 installer size does not match; old versions have not been deleted.'
+          }
+
+          # AWS CLI automatically retrieves all pages. Match only this app's
+          # installer keys, so unrelated bucket objects are never deleted.
+          $listJson = aws s3api list-objects-v2 --bucket $bucket `
+            --prefix 'Fluent PDF Setup ' --endpoint-url $endpoint --output json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not list R2 installers; old versions have not been deleted.'
+          }
+          $listing = $listJson | ConvertFrom-Json
+          $installers = @(
+            foreach ($item in $listing.Contents) {
+              if ($item.Key -cmatch '^Fluent PDF Setup (?<version>\d+\.\d+\.\d+) win-x64\.exe$') {
+                [pscustomobject]@{ Key = $item.Key; Version = [version]$Matches.version }
+              }
+            }
+          )
+          if ($fileName -cnotin $installers.Key) {
+            throw 'The uploaded installer was not listed in R2; cleanup has been stopped.'
+          }
+
+          # Numeric version order: 1.10.0 is newer than 1.9.0. Re-running an old
+          # release must not evict newer releases because of its upload date.
+          $versions = @($installers.Version | Sort-Object -Descending -Unique)
+          $keep = @($versions | Select-Object -First 3)
+          foreach ($item in $installers) {
+            if ($item.Version -notin $keep) {
+              Write-Output "Removing old R2 installer: $($item.Key)"
+              aws s3api delete-object --bucket $bucket --key $item.Key `
+                --endpoint-url $endpoint --output json | Out-Null
+              if ($LASTEXITCODE -ne 0) {
+                throw 'Failed to delete an old R2 installer.'
+              }
+            }
+          }
+          Write-Output "R2 installer versions retained: $($keep -join ', ')"
