@@ -56,6 +56,18 @@ jobs:
 
           "version=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Generate release notes from commits
+        id: release_notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          version: v2.14.2
+          config: cliff.toml
+          # --current follows the checked-out tag, including when an old run is retried.
+          args: --current --offline
+        env:
+          OUTPUT: ${{ runner.temp }}/release-notes.md
+          RELEASE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+
 #      - name: Run tests
 #        run: dotnet test pdf_fluent.slnx --configuration Release
 
@@ -129,7 +141,8 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Fluent PDF v${{ steps.version.outputs.version }}
-          generate_release_notes: true
+          body_path: ${{ steps.release_notes.outputs.changelog }}
+          generate_release_notes: false
           files: artifacts/installer/*.exe
           fail_on_unmatched_files: true
 

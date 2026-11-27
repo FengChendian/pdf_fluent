@@ -9,6 +9,7 @@
 | `src/pdf_fluent.csproj` | 唯一版本号来源 |
 | `installer/PDFFluent.iss` | Inno Setup 安装包配置 |
 | `.github/workflows/release-win-x64.yml` | 发布、打包、GitHub Release 及 R2 自动化 |
+| `cliff.toml` | 根据 commit 自动生成 Release 正文的分类与模板 |
 
 发布工作流依次执行：
 
@@ -21,6 +22,28 @@
 7. 上传安装包到 R2，成功后发布更新清单，最后仅保留版本号最高的三个安装包。
 
 普通分支推送不会触发发布，只有推送 `v*` 标签才会触发。
+
+## 自动发布说明
+
+版本校验通过后，工作流使用 git-cliff 2.14.2，根据当前标签与上一个稳定版本标签之间的
+commit 自动生成 Release 正文。首次发布包含当前标签之前的全部提交；重跑旧标签时仍生成该标签的说明。
+分类与展示格式统一维护在根目录 `cliff.toml`，不依赖 PR 或 PR 标签。
+
+提交格式使用 `<type>[可选 scope]: <说明>`，例如：
+
+```text
+feat(reader): 新增高亮颜色选择
+fix(update): 修复更新后启动路径
+perf(render): 减少页面渲染分配
+```
+
+正文按新功能、问题修复、性能优化、代码重构、文档、测试、构建与维护、回退、其他变更分类，
+保留提交链接及 Full Changelog 比较链接。未按约定命名的提交进入“其他变更”，不被静默丢弃。
+`!` 或 `BREAKING CHANGE:` 标记的不兼容变更会突出显示。正文使用原始提交说明，不自动翻译。
+
+生成的 `release-notes.md` 只写入 CI 的临时目录，再通过 `body_path` 交给 Release action；
+不提交到仓库，也不需要为每个版本维护 Markdown 文件。发布前仍只需更新版本号、提交、推送标签。
+GitHub 原生 `generate_release_notes` 已关闭，避免重复生成基于 PR 的内容。
 
 ## R2 更新源
 

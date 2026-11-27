@@ -1,0 +1,49 @@
+# Release notes are generated in the CI temporary directory, never committed.
+[changelog]
+header = ""
+body = """
+{% set repo_url = get_env(name="RELEASE_REPO_URL", default="https://github.com/FengChendian/pdf_fluent") %}\
+{% if version %}\
+## {{ version }} 更新内容
+{% else %}\
+## 未发布更新
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{% if commit.breaking %}**不兼容变更：** {% endif %}\
+{{ commit.message | split(pat="\n") | first }} ([{{ commit.id | truncate(length=7, end="") }}]({{ repo_url }}/commit/{{ commit.id }}))
+{% endfor %}\
+{% endfor %}
+{% if version %}\
+{% if previous.version %}\
+**Full Changelog**: [{{ previous.version }}...{{ version }}]({{ repo_url }}/compare/{{ previous.version }}...{{ version }})
+{% else %}\
+**Full Changelog**: [{{ version }}]({{ repo_url }}/commits/{{ version }})
+{% endif %}\
+{% endif %}\
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+commit_parsers = [
+    { message = '^feat(?:\([^)]*\))?!?:', group = '<!-- 01 -->新功能' },
+    { message = '^fix(?:\([^)]*\))?!?:', group = '<!-- 02 -->问题修复' },
+    { message = '^perf(?:\([^)]*\))?!?:', group = '<!-- 03 -->性能优化' },
+    { message = '^refactor(?:\([^)]*\))?!?:', group = '<!-- 04 -->代码重构' },
+    { message = '^docs?(?:\([^)]*\))?!?:', group = '<!-- 05 -->文档' },
+    { message = '^test(?:\([^)]*\))?!?:', group = '<!-- 06 -->测试' },
+    { message = '^(?:build|ci|chore|style)(?:\([^)]*\))?!?:', group = '<!-- 07 -->构建与维护' },
+    { message = '^revert(?:\([^)]*\))?!?:', group = '<!-- 08 -->回退' },
+    { message = '.*', group = '<!-- 09 -->其他变更' },
+]
+filter_commits = false
+tag_pattern = '^v[0-9]+\.[0-9]+\.[0-9]+$'
+topo_order = true
+sort_commits = "oldest"
