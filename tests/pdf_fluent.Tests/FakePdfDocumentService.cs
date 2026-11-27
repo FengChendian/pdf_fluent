@@ -14,6 +14,27 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
     private readonly List<int> _renderedPages = new();
     private readonly List<float> _renderScales = new();
     private readonly List<int> _textPages = new();
+    private readonly List<int> _linkPages = new();
+    private readonly ManualResetEventSlim _linkGate = new(true);
+    private readonly TaskCompletionSource _linkLoadStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _linkCancellationCount;
+    public Task LinkLoadStarted => _linkLoadStarted.Task;
+    public int LinkCancellationCount => Volatile.Read(ref _linkCancellationCount);
+    public Exception? LinkLoadError { get; set; }
+    public Dictionary<int, PdfLinkPage> LinkPages { get; } = new();
+    public int[] RequestedLinkPages { get { lock (_linkPages) return _linkPages.ToArray(); } }
+
+    public PdfLinkPage GetPageLinks(string filePath, int pageNumber, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_linkPages) _linkPages.Add(pageNumber);
+        _linkLoadStarted.TrySetResult();
+        try { _linkGate.Wait(cancellationToken); }
+        catch (OperationCanceledException) { Interlocked.Increment(ref _linkCancellationCount); throw; }
+        if (LinkLoadError is { } error) throw error;
+        return LinkPages.GetValueOrDefault(pageNumber) ?? new PdfLinkPage(
+            pageNumber, new PdfRect(0, 800 + pageNumber % 3 * 100, 600, 0), []);
+    }
     private int _textLoadCancellationCount;
     private readonly bool _scaleRenderSize;
     private readonly bool _useRequestedPixelSize;
@@ -173,12 +194,16 @@ internal sealed class FakePdfDocumentService : IPdfDocumentService, IDisposable
     public void AllowRenders() => _renderGate.Set();
     public void BlockTextLoads() => _textGate.Reset();
     public void AllowTextLoads() => _textGate.Set();
+    public void BlockLinkLoads() => _linkGate.Reset();
+    public void AllowLinkLoads() => _linkGate.Set();
 
     public void Dispose()
     {
         _renderGate.Set();
         _textGate.Set();
+        _linkGate.Set();
         _renderGate.Dispose();
         _textGate.Dispose();
+        _linkGate.Dispose();
     }
 }

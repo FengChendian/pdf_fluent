@@ -224,8 +224,12 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         _realizedPages.Add(page);
         if (isVisible) _visiblePages.Add(page);
         else _visiblePages.Remove(page);
-        if (isVisible) _ = ObserveTextLoadAsync(page);
-        else CancelAutomaticTextLoad(page);
+        if (isVisible) _ = ObserveVisiblePageContentAsync(page);
+        else
+        {
+            CancelAutomaticTextLoad(page);
+            CancelAutomaticLinkLoadsExcept(_visiblePages);
+        }
         if (isVisible) _ = ObserveHighlightLoadAsync(page);
         page.SetZoom(_zoom, notify: true);
 
@@ -243,6 +247,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
     {
         _realizedPages.Remove(page);
         _visiblePages.Remove(page);
+        CancelAutomaticLinkLoadsExcept(_visiblePages);
         CancelAutomaticTextLoad(page);
         if (_renderRequests.TryGetValue(page.PageIndex, out RenderRequest? request))
         {
@@ -271,9 +276,10 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         _visiblePages.Clear();
         foreach (PdfPageViewModel page in visiblePages ?? realizedPages) _visiblePages.Add(page);
         CancelAutomaticTextLoadsExcept(_visiblePages);
+        CancelAutomaticLinkLoadsExcept(_visiblePages);
         foreach (PdfPageViewModel page in _visiblePages)
         {
-            _ = ObserveTextLoadAsync(page);
+            _ = ObserveVisiblePageContentAsync(page);
             _ = ObserveHighlightLoadAsync(page);
         }
         if (currentPageIndex is >= 0)
@@ -679,6 +685,7 @@ public sealed partial class DocumentTabViewModel : ViewModelBase, IDisposable
         _realizedPages.Clear();
         _visiblePages.Clear();
         CancelAutomaticTextLoadsExcept(_visiblePages);
+        CancelAutomaticLinkLoadsExcept(_visiblePages);
         _renderZoom = _zoom;
         _appliedScaling = _renderScaling;
     }

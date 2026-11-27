@@ -454,6 +454,12 @@
             </Border>
         </Grid>
 
+        <Border x:Name="LinkStatus" Grid.RowSpan="2" Background="#F2FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
+                CornerRadius="8" Padding="10,6" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16"
+                MaxWidth="520" IsVisible="False" IsHitTestVisible="False">
+            <TextBlock x:Name="LinkStatusText" FontSize="11" Foreground="#51596D" TextTrimming="CharacterEllipsis" />
+        </Border>
+
         <Border x:Name="PageIndicatorOverlay" Grid.RowSpan="2" Background="#F2FFFFFF" BorderBrush="#DDE2EC" BorderThickness="1"
                 CornerRadius="16" Padding="16,8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,20"
                 BoxShadow="0 3 14 0 #12000000" IsVisible="False" IsHitTestVisible="False">

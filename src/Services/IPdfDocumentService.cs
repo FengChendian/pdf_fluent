@@ -9,6 +9,9 @@ public interface IPdfDocumentService
 
     List<TocItem> GetBookmarks(string filePath);
 
+    /// <summary>Loads link metadata independently of managed character extraction.</summary>
+    PdfLinkPage GetPageLinks(string filePath, int pageNumber, CancellationToken cancellationToken = default);
+
     PdfTextPage GetPageText(
         string filePath,
         int pageNumber,

@@ -135,6 +135,14 @@ public sealed partial class PdfPageViewModel : ViewModelBase
 
     public void SetText(PdfTextPage text) => Text = text;
 
+    public PdfLinkPage? Links { get; private set; }
+
+    public void SetLinks(PdfLinkPage links)
+    {
+        Links = links;
+        OnPropertyChanged(nameof(Links));
+    }
+
     public void NotifyTextOverlayChanged()
     {
         TextOverlayVersion++;

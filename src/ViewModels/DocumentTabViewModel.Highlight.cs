@@ -96,10 +96,11 @@ public sealed partial class DocumentTabViewModel
 
     public PdfHighlight? HitTestHighlight(int pageIndex, Point pagePoint, double toleranceInDips = 2)
     {
-        if (GetLoadedText(pageIndex) is not { } text) return null;
+        PdfRect? pageBox = GetLoadedText(pageIndex)?.CropBox ?? GetLoadedLinks(pageIndex)?.CropBox;
+        if (pageBox is not { } cropBox) return null;
         double scale = LayoutScale * Zoom;
-        double x = text.CropBox.L + pagePoint.X / scale;
-        double y = text.CropBox.T - pagePoint.Y / scale;
+        double x = cropBox.L + pagePoint.X / scale;
+        double y = cropBox.T - pagePoint.Y / scale;
         double tolerance = toleranceInDips / scale;
         return Highlights.LastOrDefault(highlight =>
             highlight.PageIndex == pageIndex &&

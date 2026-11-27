@@ -112,6 +112,13 @@ public partial class PdfDocumentView : UserControl
 
     private void OnDocumentScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
+        if (e.OffsetDelta != default)
+        {
+            _linkHover = null;
+            if (_pressedLink is not null) _linkClickCanceled = true;
+            SetLinkStatus(null);
+            if (!_isSelectingText) DocumentScroller.Cursor = DefaultCursor;
+        }
         if (_scrollOffsetToRestore is null) _observedDocument?.UpdateScrollOffset(DocumentScroller.Offset);
     }
 

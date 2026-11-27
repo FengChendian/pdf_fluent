@@ -50,17 +50,27 @@ public partial class PdfDocumentView
         AddHandler(PointerReleasedEvent, OnTextPointerReleased, RoutingStrategies.Bubble);
         AddHandler(KeyDownEvent, OnTextKeyDown, RoutingStrategies.Tunnel);
         PointerExited += OnTextPointerExited;
+        DocumentScroller.PointerCaptureLost += OnTextPointerCaptureLost;
     }
 
     private void AttachTextDocument(DocumentTabViewModel? document)
     {
         if (ReferenceEquals(_textDocument, document)) return;
         CancelTextSelection();
+        CancelLinkPress();
+        SetLinkStatus(null);
+        _linkHover = null;
         if (_textDocument is not null)
+        {
             _textDocument.SearchResultNavigationRequested -= NavigateToSearchResult;
+            _textDocument.PageLinksLoaded -= OnPageLinksLoaded;
+        }
         _textDocument = document;
         if (_textDocument is not null)
+        {
             _textDocument.SearchResultNavigationRequested += NavigateToSearchResult;
+            _textDocument.PageLinksLoaded += OnPageLinksLoaded;
+        }
     }
 
     private void DetachTextInteraction()
@@ -75,17 +85,33 @@ public partial class PdfDocumentView
     {
         if (DataContext is not DocumentTabViewModel document || !IsPageContent(e.Source)) return;
         PointerPointProperties properties = e.GetCurrentPoint(this).Properties;
+        _linkHover = null;
         if (properties.IsRightButtonPressed)
         {
+            CancelLinkPress();
             SelectHighlightAtPointer(e, document, showContextMenu: true);
             return;
         }
         if (!properties.IsLeftButtonPressed) return;
 
+        CancelLinkPress();
         bool startedOnHighlight = SelectHighlightAtPointer(e, document, showContextMenu: false);
+        if (!startedOnHighlight && TryGetLink(e, out int linkPage, out PdfLink? link))
+        {
+            _pressedLink = link;
+            _pressedLinkPage = linkPage;
+            _linkPressPoint = e.GetPosition(DocumentScroller);
+            _linkPointer = e.Pointer;
+        }
         if (!TryGetTextPosition(e, nearestOnLine: false, out PageTextPosition position) || !position.Hit.IsOnText)
         {
             if (TryGetPagePoint(e, out _, out _)) document.ClearSelection();
+            if (_pressedLink is not null)
+            {
+                DocumentScroller.Focus();
+                e.Pointer.Capture(DocumentScroller);
+                e.Handled = true;
+            }
             return;
         }
 
@@ -139,6 +165,17 @@ public partial class PdfDocumentView
     private void OnTextPointerMoved(object? sender, PointerEventArgs e)
     {
         if (DataContext is not DocumentTabViewModel document) return;
+        if (_pressedLink is not null)
+        {
+            if (((Vector)(e.GetPosition(DocumentScroller) - _linkPressPoint)).Length > 3 ||
+                !TryGetLink(e, out int pageIndex, out PdfLink? link) || pageIndex != _pressedLinkPage ||
+                !ReferenceEquals(link, _pressedLink)) _linkClickCanceled = true;
+            if (!_linkClickCanceled)
+            {
+                e.Handled = true;
+                return;
+            }
+        }
         if (_isSelectingText)
         {
             Vector movement = e.GetPosition(DocumentScroller) - _selectionPressPoint;
@@ -153,19 +190,38 @@ public partial class PdfDocumentView
                 _selectionMoved = true;
             }
             _lastSelectionPointer = e.GetPosition(DocumentScroller);
+            DocumentScroller.Cursor = TextCursor;
             UpdateTextSelection(e);
             e.Handled = true;
             return;
         }
 
+        RememberLinkHover(e);
+        bool overLink = TryGetLink(e, out _, out PdfLink? hoveredLink);
+        SetLinkStatus(overLink ? hoveredLink!.Target!.DisplayText : null);
         bool overText = TryGetTextPosition(e, nearestOnLine: false, out PageTextPosition position) &&
                         position.Hit.IsOnText;
-        DocumentScroller.Cursor = overText ? TextCursor : DefaultCursor;
+        DocumentScroller.Cursor = overLink ? LinkCursor : overText ? TextCursor : DefaultCursor;
     }
 
     private async void OnTextPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_isSelectingText || DataContext is not DocumentTabViewModel document) return;
+        if (e.InitialPressMouseButton != MouseButton.Left || DataContext is not DocumentTabViewModel document) return;
+        PdfLinkTarget? target = !_linkClickCanceled && _pressedLink is not null &&
+            ((Vector)(e.GetPosition(DocumentScroller) - _linkPressPoint)).Length <= 3 &&
+            TryGetLink(e, out int linkPage, out PdfLink? link) &&
+            linkPage == _pressedLinkPage && ReferenceEquals(link, _pressedLink) ? link!.Target : null;
+        CancelLinkPress();
+        if (target is not null)
+        {
+            CancelTextSelection();
+            document.ClearSelection();
+            document.ActiveSearchResult = null;
+            e.Handled = true;
+            await ActivateLinkAsync(target, document);
+            return;
+        }
+        if (!_isSelectingText) return;
         if (_selectionStartedOnHighlight && !_selectionMoved)
         {
             CancelTextSelection();
@@ -316,13 +372,28 @@ public partial class PdfDocumentView
         _isSelectingText = false;
         _selectionStartedOnHighlight = false;
         _selectionAutoScrollTimer?.Stop();
-        _selectionPointer?.Capture(null);
+        IPointer? pointer = _selectionPointer;
         _selectionPointer = null;
+        pointer?.Capture(null);
     }
 
     private void OnTextPointerExited(object? sender, PointerEventArgs e)
     {
+        // Capturing the scroller can raise PointerExited for descendants while
+        // the pointer is still inside the reader. That is not leaving a link.
+        if (!new Rect(Bounds.Size).Contains(e.GetPosition(this)))
+        {
+            _linkHover = null;
+            _linkClickCanceled = true;
+            SetLinkStatus(null);
+        }
         if (!_isSelectingText) DocumentScroller.Cursor = DefaultCursor;
+    }
+
+    private void OnTextPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CancelTextSelection();
+        CancelLinkPress();
     }
 
     private async void OnTextKeyDown(object? sender, KeyEventArgs e)
@@ -358,6 +429,8 @@ public partial class PdfDocumentView
 
         if (e.Key == Key.Escape && !IsTextBoxInput(e.Source))
         {
+            CancelTextSelection();
+            CancelLinkPress();
             document.ClearSelection();
             document.IsHighlightMode = false;
             e.Handled = true;

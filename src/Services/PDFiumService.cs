@@ -15,7 +15,7 @@ using pdf_fluent.Models;
 
 namespace pdf_fluent.Services
 {
-    public class PDFiumService : IDisposable, IPdfDocumentService
+    public partial class PDFiumService : IDisposable, IPdfDocumentService
     {
         private bool _disposed;
 
@@ -23,10 +23,7 @@ namespace pdf_fluent.Services
         private static int _libraryRefCount;
         private static readonly object _libraryLock = new();
 
-        // ── Text-page cache ──────────────────────────────────────────
-        // Key: filePath|pageIndex  — simple string key to avoid holding
-        // document/page handles across calls.
-        private readonly ConcurrentDictionary<string, FpdfTextpageT> _textPageCache = new();
+        // Native page/text pairs are bounded and share this document cache.
         private readonly ConcurrentDictionary<string, FpdfDocumentT> _pdfDocumentCache = new();
 
         public PDFiumService()
@@ -496,31 +493,15 @@ namespace pdf_fluent.Services
         /// Loads a text page for the given PDF page.  Opens the document
         /// on first call and caches both the document handle and the text
         /// page.  Call <see cref="ReleaseTextPage"/> when done.
+        /// The returned handle is borrowed; subsequent service calls may evict it.
         /// </summary>
         public FpdfTextpageT LoadTextPage(string filePath, int pageIndex)
         {
-            string pageKey = $"{filePath}|{pageIndex}";
-
-            if (_textPageCache.TryGetValue(pageKey, out var cached))
-                return cached;
-
-            FpdfTextpageT textPage;
             lock (_pageLock)
             {
-                var document = GetOrLoadDocument(filePath);
-                var page = fpdfview.FPDF_LoadPage(document, pageIndex);
-                try
-                {
-                    textPage = fpdf_text.FPDFTextLoadPage(page);
-                }
-                finally
-                {
-                    fpdfview.FPDF_ClosePage(page);
-                }
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                return GetNativeTextPage(filePath, pageIndex, default).Text;
             }
-
-            _textPageCache[pageKey] = textPage;
-            return textPage;
         }
 
         /// <summary>
@@ -528,11 +509,7 @@ namespace pdf_fluent.Services
         /// </summary>
         public void ReleaseTextPage(string filePath, int pageIndex)
         {
-            string pageKey = $"{filePath}|{pageIndex}";
-            if (_textPageCache.TryRemove(pageKey, out var textPage))
-            {
-                fpdf_text.FPDFTextClosePage(textPage);
-            }
+            lock (_pageLock) ReleaseNativeTextPage((filePath, pageIndex));
         }
 
         /// <summary>
@@ -543,9 +520,7 @@ namespace pdf_fluent.Services
         {
             lock (_pageLock)
             {
-                foreach (var kv in _textPageCache)
-                    fpdf_text.FPDFTextClosePage(kv.Value);
-                _textPageCache.Clear();
+                foreach (var key in _nativePages.Keys.ToArray()) ReleaseNativeTextPage(key);
 
                 foreach (var kv in _pdfDocumentCache)
                     fpdfview.FPDF_CloseDocument(kv.Value);
@@ -559,16 +534,10 @@ namespace pdf_fluent.Services
         /// </summary>
         public void ReleaseTextPagesForFile(string filePath)
         {
-            var keysToRemove = new List<string>();
-            foreach (var key in _textPageCache.Keys)
+            lock (_pageLock)
             {
-                if (key.StartsWith(filePath + "|"))
-                    keysToRemove.Add(key);
-            }
-            foreach (var key in keysToRemove)
-            {
-                if (_textPageCache.TryRemove(key, out var textPage))
-                    fpdf_text.FPDFTextClosePage(textPage);
+                foreach (var key in _nativePages.Keys.Where(key => key.File == filePath).ToArray())
+                    ReleaseNativeTextPage(key);
             }
         }
 
@@ -588,11 +557,13 @@ namespace pdf_fluent.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 ObjectDisposedException.ThrowIf(_disposed, this);
-                FpdfTextpageT textPage = LoadTextPage(filePath, pageIndex);
+                NativeTextPage entry = GetNativeTextPage(filePath, pageIndex, cancellationToken);
+                FpdfTextpageT textPage = entry.Text;
                 int count = Math.Max(0, fpdf_text.FPDFTextCountChars(textPage));
                 characters = new PdfTextCharacter[count];
                 for (int index = 0; index < count; index++)
                 {
+                    if ((index & 127) == 0) cancellationToken.ThrowIfCancellationRequested();
                     double left = 0, right = 0, bottom = 0, top = 0;
                     PdfRect bounds = fpdf_text.FPDFTextGetCharBox(
                         textPage, index, ref left, ref right, ref bottom, ref top) != 0
@@ -612,27 +583,10 @@ namespace pdf_fluent.Services
                         bounds,
                         looseBounds);
                 }
-
-                cropBox = GetVisiblePageBox(filePath, pageIndex);
-                ReleaseTextPage(filePath, pageIndex);
+                cropBox = entry.CropBox;
             }
 
             return new PdfTextPage(pageIndex, cropBox, characters);
-        }
-
-        private PdfRect GetVisiblePageBox(string filePath, int pageIndex)
-        {
-            var document = GetOrLoadDocument(filePath);
-            var page = fpdfview.FPDF_LoadPage(document, pageIndex)
-                       ?? throw new InvalidOperationException($"无法加载 PDF 第 {pageIndex + 1} 页。");
-            try
-            {
-                return GetVisiblePageBox(document, pageIndex, page);
-            }
-            finally
-            {
-                fpdfview.FPDF_ClosePage(page);
-            }
         }
 
         private static PdfRect GetVisiblePageBox(FpdfDocumentT document, int pageIndex, FpdfPageT page)
